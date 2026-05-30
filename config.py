@@ -3,10 +3,20 @@
 #  Edit this file to customize the bot's behavior
 # ============================================================
 
+import os
+
+def _read_secret(name: str, fallback: str = "") -> str:
+    secret_path = f"/run/secrets/{name}"
+    try:
+        with open(secret_path) as _f:
+            return _f.read().strip()
+    except FileNotFoundError:
+        return os.environ.get(name.upper(), fallback)
+
 # -----------------------------------------------------------
 # Telegram
 # -----------------------------------------------------------
-TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"   # From @BotFather
+TELEGRAM_BOT_TOKEN = _read_secret("telegram_bot_token", "YOUR_BOT_TOKEN_HERE")   # From @BotFather
 TELEGRAM_CHAT_ID   = "YOUR_CHAT_ID_HERE"     # Channel/group/user ID
 
 # -----------------------------------------------------------

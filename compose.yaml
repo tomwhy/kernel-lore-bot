@@ -1,0 +1,34 @@
+# =============================================================
+#  Kernel Lore Bot — Docker Compose
+# =============================================================
+services:
+  kernel-lore-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - bot-state:/app/data
+
+    secrets:
+      - telegram_bot_token
+
+    container_name: kernel-lore-bot
+
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "bot.py"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+secrets:
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token
+
+volumes:
+  bot-state:

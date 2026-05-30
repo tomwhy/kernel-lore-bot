@@ -1,2 +1,8 @@
 .project
+secrets/
+.env
 seen_threads.json
+data/
+__pycache__/
+*.pyc
+.venv/
