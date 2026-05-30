@@ -30,7 +30,7 @@ TELEGRAM_BOT_TOKEN: str = _read_secret("telegram_bot_token", "YOUR_BOT_TOKEN_HER
 # Only this user can run privileged commands like /debug.
 # Find yours by messaging @userinfobot on Telegram.
 # Leave as 0 to disable privileged commands entirely.
-ADMIN_CHAT_ID: int = int(_os.environ.get("ADMIN_CHAT_ID", "0"))
+ADMIN_CHAT_ID: int = int(os.environ.get("ADMIN_CHAT_ID", "0"))
 
 # -----------------------------------------------------------
 # Scraping schedule

@@ -65,7 +65,7 @@ def run_job(dry_run: bool = False) -> None:
     seen.update(t.id for t in new_threads)
     by_id = {t.id: t for t in all_interesting}
     seen = state.prune_old(seen, by_id)
-    state.save_seen(seen)
+    # state.save_seen(seen)
 
     log.info("=== Scrape complete ===")
 

@@ -56,7 +56,7 @@ def _format_thread(thread: Thread) -> str:
     return "\n".join(lines)
 
 
-def _format_header(total: int) -> str:
+def _format_header(count: int) -> str:
     now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     return (
         f"🐧 *Kernel Lore Daily Digest*\n"
@@ -86,7 +86,7 @@ def _build_batches(threads: list[Thread]) -> Generator[str, None, None]:
     if not threads:
         return
 
-    for thead in threads:
+    for thread in threads:
         current = _format_thread(thread)
         needed = len(current)
         if need_sep:
@@ -121,7 +121,7 @@ def send_to(chat_id: int, text: str) -> bool:
         resp.raise_for_status()
         return True
     except requests.RequestException as exc:
-        log.error("Telegram send failed (chat=%d): %s", chat_id, exc)
+        log.error("Telegram send failed (chat=%d): %s %s", chat_id, exc, resp.text)
         return False
 
 
@@ -170,7 +170,7 @@ def send_threads(threads: list[Thread]) -> int:
         sent, blocked = _broadcast_batch(batch_text, chat_ids)
         total_sent += sent
         all_blocked.update(blocked)
-        log.debug("Batch #%d — sent to %d/%d", i, len(batches), sent, len(chat_ids))
+        log.debug("Batch #%d — sent to %d/%d", i, sent, len(chat_ids))
         time.sleep(0.1) 
 
     if all_blocked:
