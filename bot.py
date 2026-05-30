@@ -3,9 +3,9 @@
 bot.py – entry point for the Kernel Lore Telegram bot
 
 Usage:
-    python bot.py           # start scheduler (runs daily per config)
+    python bot.py           # start scheduler + Telegram poller (normal mode)
     python bot.py --now     # run one scrape immediately, then exit
-    python bot.py --test    # dry-run: print matches, don't send Telegram msgs
+    python bot.py --test    # dry-run: print matches, don't send anything
 """
 
 from __future__ import annotations
@@ -34,13 +34,12 @@ log = logging.getLogger("kernel-bot")
 
 
 # ------------------------------------------------------------------ #
-#  Core job                                                            #
+#  Core scrape + broadcast job                                         #
 # ------------------------------------------------------------------ #
 
 def run_job(dry_run: bool = False) -> None:
     log.info("=== Kernel Lore scrape started ===")
 
-    first_run = state.is_first_run()
     seen = state.load_seen()
 
     all_interesting = fetch_all_feeds()
@@ -54,17 +53,15 @@ def run_job(dry_run: bool = False) -> None:
     # Filter out already-seen threads
     new_threads = filter(lambda t: t.id not in seen, new_threads)
     new_threads = list(new_threads)
-    log.info("New interesting threads: %d", len(new_threads))
+    log.info("New interesting threads: %d  |  Subscribers: %d",
+             len(new_threads), subscribers.count())
 
     if dry_run:
         _print_dry_run(new_threads)
     else:
-        if new_threads:
-            send_threads(new_threads)
-        else:
-            log.info("Nothing new to send today.")
+        send_threads(new_threads)
 
-    # Update state
+    # Persist state
     seen.update(t.id for t in new_threads)
     by_id = {t.id: t for t in all_interesting}
     seen = state.prune_old(seen, by_id)
@@ -77,8 +74,8 @@ def _print_dry_run(threads: list[Thread]) -> None:
     if not threads:
         print("[DRY RUN] No new interesting threads found.")
         return
-
-    print(f"\n[DRY RUN] {len(threads)} thread(s) would be sent:\n")
+    print(f"\n[DRY RUN] {len(threads)} thread(s) would be sent to "
+          f"{subscribers.count()} subscriber(s):\n")
     for t in threads:
         icon = "🔴" if t.label == "security" else "🟢"
         print(f"  {icon} [{t.list_name}] {t.title}")
@@ -110,6 +107,7 @@ def main() -> None:
 
     # ---- Normal mode: poller thread + daily scheduler ----
     log.info("Starting Telegram update poller…")
+    poller.register_run_job(run_job)
     poller.start()
  
     _schedule_job(config.SCHEDULE_TIME, run_job)
@@ -124,8 +122,8 @@ def main() -> None:
         log.info("Shutting down…")
         poller.stop()
         log.info("Stopped.")
- 
- 
+
+
 def _check_config() -> None:
     errors = []
     if config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
@@ -141,7 +139,7 @@ def _check_config() -> None:
 def _schedule_job(time_str: str, job) -> None:
     log.info("Digest scheduled daily at %s UTC", time_str)
     schedule.every().day.at(time_str, "UTC").do(job)
- 
- 
+
+
 if __name__ == "__main__":
     main()

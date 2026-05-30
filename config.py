@@ -3,7 +3,16 @@
 #  Edit this file to customize the bot's behavior
 # ============================================================
 
-import os
+# -----------------------------------------------------------
+# Telegram
+# -----------------------------------------------------------
+# The bot token is loaded from a Docker secret file at runtime
+# (/run/secrets/telegram_bot_token) so it is never stored in this
+# file or in environment variables.  Fallback order:
+#   1. /run/secrets/telegram_bot_token   (Docker secret)
+#   2. TELEGRAM_BOT_TOKEN env var        (local dev / non-Docker)
+#   3. Hardcoded value below             (last resort / plain runs)
+import os 
 import pathlib
 
 def _read_secret(name: str, fallback: str = "") -> str:
@@ -12,12 +21,16 @@ def _read_secret(name: str, fallback: str = "") -> str:
         with open(secret_path) as _f:
             return _f.read().strip()
     except FileNotFoundError:
-        return os.environ.get(name.upper(), fallback)
+        pass
+    return os.environ.get(name.upper(), fallback)
 
-# -----------------------------------------------------------
-# Telegram
-# -----------------------------------------------------------
-TELEGRAM_BOT_TOKEN = _read_secret("telegram_bot_token", "YOUR_BOT_TOKEN_HERE")   # From @BotFather
+TELEGRAM_BOT_TOKEN: str = _read_secret("telegram_bot_token", "YOUR_BOT_TOKEN_HERE")
+
+# Chat ID of the bot administrator.
+# Only this user can run privileged commands like /debug.
+# Find yours by messaging @userinfobot on Telegram.
+# Leave as 0 to disable privileged commands entirely.
+ADMIN_CHAT_ID: int = int(_os.environ.get("ADMIN_CHAT_ID", "0"))
 
 # -----------------------------------------------------------
 # Scraping schedule
@@ -108,7 +121,6 @@ FEATURE_KEYWORDS = [
 # Rate limiting / politeness
 # -----------------------------------------------------------
 REQUEST_DELAY_SECONDS  = 0.5    # Pause between HTTP requests
-MAX_MESSAGES_PER_RUN   = 30   # Cap to avoid Telegram flood limits
 REQUEST_TIMEOUT        = 15   # HTTP timeout per feed
 
 # -----------------------------------------------------------
