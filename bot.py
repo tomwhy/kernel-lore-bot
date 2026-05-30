@@ -19,7 +19,9 @@ from datetime import datetime, timedelta, timezone
 import schedule
 
 import config
+import poller
 import state
+import subscribers
 from notifier import send_threads
 from scraper import Thread, fetch_all_feeds
 
@@ -106,47 +108,40 @@ def main() -> None:
         run_job()
         return
 
-    # ---- Scheduler mode ----
-    log.info("Scheduling job: cron = %s", config.SCHEDULE_CRON)
-    _schedule_from_cron(config.SCHEDULE_CRON, run_job)
-
-    log.info("Bot is running. Press Ctrl-C to stop.")
+    # ---- Normal mode: poller thread + daily scheduler ----
+    log.info("Starting Telegram update poller…")
+    poller.start()
+ 
+    _schedule_job(config.SCHEDULE_TIME, run_job)
+ 
+    log.info("Bot is running. Send /start to the bot on Telegram to subscribe.")
+    log.info("Press Ctrl-C to stop.")
     try:
         while True:
             schedule.run_pending()
             time.sleep(30)
     except KeyboardInterrupt:
+        log.info("Shutting down…")
+        poller.stop()
         log.info("Stopped.")
-
-
+ 
+ 
 def _check_config() -> None:
     errors = []
     if config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        errors.append("TELEGRAM_BOT_TOKEN is not set in config.py")
-    if config.TELEGRAM_CHAT_ID == "YOUR_CHAT_ID_HERE":
-        errors.append("TELEGRAM_CHAT_ID is not set in config.py")
+        errors.append("TELEGRAM_BOT_TOKEN is not set (config.py or Docker secret)")
     if not config.WATCHED_LISTS:
         errors.append("WATCHED_LISTS is empty — add at least one list")
     if errors:
         for e in errors:
             log.error("Config error: %s", e)
         sys.exit(1)
-
-
-def _schedule_from_cron(cron: str, job) -> None:
-    """
-    Parse a simple daily cron expression "M H * * *" and schedule with
-    the `schedule` library.  Only minute/hour fields are used; the bot
-    is designed for at-most-once-daily runs.
-    """
-    parts = cron.strip().split()
-    if len(parts) < 2:
-        raise ValueError(f"Unsupported cron expression: {cron!r}")
-    minute, hour = parts[0], parts[1]
-    time_str = f"{int(hour):02d}:{int(minute):02d}"
-    log.info("Job scheduled daily at %s UTC", time_str)
+ 
+ 
+def _schedule_job(time_str: str, job) -> None:
+    log.info("Digest scheduled daily at %s UTC", time_str)
     schedule.every().day.at(time_str, "UTC").do(job)
-
-
+ 
+ 
 if __name__ == "__main__":
     main()

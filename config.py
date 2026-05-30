@@ -4,6 +4,7 @@
 # ============================================================
 
 import os
+import pathlib
 
 def _read_secret(name: str, fallback: str = "") -> str:
     secret_path = f"/run/secrets/{name}"
@@ -17,13 +18,12 @@ def _read_secret(name: str, fallback: str = "") -> str:
 # Telegram
 # -----------------------------------------------------------
 TELEGRAM_BOT_TOKEN = _read_secret("telegram_bot_token", "YOUR_BOT_TOKEN_HERE")   # From @BotFather
-TELEGRAM_CHAT_ID   = "YOUR_CHAT_ID_HERE"     # Channel/group/user ID
 
 # -----------------------------------------------------------
 # Scraping schedule
 # -----------------------------------------------------------
-# Cron-style: run every day at 08:00 UTC
-SCHEDULE_CRON = "0 8 * * *"
+# run every day at 08:00 UTC
+SCHEDULE_TIME = "08:00"
 
 # How many hours back to look for "new" posts on first run
 # (prevents a flood of old messages on initial startup)
@@ -114,4 +114,6 @@ REQUEST_TIMEOUT        = 15   # HTTP timeout per feed
 # -----------------------------------------------------------
 # State file (tracks seen thread IDs across runs)
 # -----------------------------------------------------------
-STATE_FILE = "seen_threads.json"
+STATE_DIR = pathlib.Path(os.environ.get("KERNEL_BOT_STATE_DIR", "data"))
+STATE_FILE = STATE_DIR / "seen_threads.json"
+SUBSCRIBERS_FILE = STATE_DIR / "subscribers.json"

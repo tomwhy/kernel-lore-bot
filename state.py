@@ -15,14 +15,8 @@ import config
 log = logging.getLogger(__name__)
 
 
-def _state_dir() -> Path:
-    dir = Path(os.environ.get("KERNEL_BOT_STATE_DIR", "data"))
-    dir.mkdir(parents=True, exist_ok=True)
-    return dir
-
-
 def _path() -> Path:
-    return _state_dir() / config.STATE_FILE
+    return config.STATE_FILE
 
 
 def load_seen() -> set[str]:
