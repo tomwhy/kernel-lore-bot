@@ -1,145 +1,291 @@
-#!/usr/bin/env python3
 """
-bot.py – entry point for the Kernel Lore Telegram bot
+bot.py – Telegram api for updates and handle bot commands
 
-Usage:
-    python bot.py           # start scheduler + Telegram poller (normal mode)
-    python bot.py --now     # run one scrape immediately, then exit
-    python bot.py --test    # dry-run: print matches, don't send anything
+Commands available to all users:
+  /start   – subscribe to the daily digest
+  /stop    – unsubscribe
+  /status  – show subscription status
+
+Admin-only commands (ADMIN_CHAT_ID in config.py):
+  /debug   – trigger an immediate scrape and broadcast right now
 """
 
-from __future__ import annotations
-
-import argparse
 import logging
-import sys
+from telegram import Update, Bot, BotCommandScopeChat
+from telegram.constants import ParseMode
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Application
+from typing import Callable, Generator
+import datetime
+import html
 import time
-from datetime import datetime, timedelta, timezone
-
-import schedule
 
 import config
-import poller
-import state
+import scraper
 import subscribers
-from notifier import send_threads
-from scraper import Thread, fetch_all_feeds
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger("kernel-bot")
-
+log = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ #
-#  Core scrape + broadcast job                                         #
+#  Scraper reply constants                                           #
 # ------------------------------------------------------------------ #
 
-def run_job(dry_run: bool = False) -> None:
-    log.info("=== Kernel Lore scrape started ===")
+TELEGRAM_MAX_CHARS = 4096   # Telegram hard limit per message
 
-    seen = state.load_seen()
-
-    all_interesting = fetch_all_feeds()
-
-    # Get new threads from the last 24 hours
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.LOOPBACK_HOURS)
-    log.info("limiting to threads newer than %dh (cutoff %s)",
-             config.LOOPBACK_HOURS, cutoff.strftime("%Y-%m-%d %H:%M"))
-    new_threads = filter(lambda t: t.updated >= cutoff, all_interesting)
-
-    # Filter out already-seen threads
-    new_threads = filter(lambda t: t.id not in seen, new_threads)
-    new_threads = list(new_threads)
-    log.info("New interesting threads: %d  |  Subscribers: %d",
-             len(new_threads), subscribers.count())
-
-    if dry_run:
-        _print_dry_run(new_threads)
-    else:
-        send_threads(new_threads)
-
-    # Persist state
-    seen.update(t.id for t in new_threads)
-    by_id = {t.id: t for t in all_interesting}
-    seen = state.prune_old(seen, by_id)
-    # state.save_seen(seen)
-
-    log.info("=== Scrape complete ===")
-
-
-def _print_dry_run(threads: list[Thread]) -> None:
-    if not threads:
-        print("[DRY RUN] No new interesting threads found.")
-        return
-    print(f"\n[DRY RUN] {len(threads)} thread(s) would be sent to "
-          f"{subscribers.count()} subscriber(s):\n")
-    for t in threads:
-        icon = "🔴" if t.label == "security" else "🟢"
-        print(f"  {icon} [{t.list_name}] {t.title}")
-        print(f"     by {t.author} — {t.updated.strftime('%Y-%m-%d %H:%M UTC')}")
-        print(f"     {t.url}")
-        print()
-
-
-# ------------------------------------------------------------------ #
-#  Entry point                                                         #
-# ------------------------------------------------------------------ #
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Kernel Lore Telegram Bot")
-    parser.add_argument("--now",  action="store_true", help="Run once immediately and exit")
-    parser.add_argument("--test", action="store_true", help="Dry-run: don't send Telegram messages")
-    args = parser.parse_args()
-
-    _check_config()
-
-    if args.test:
-        log.info("Dry-run mode enabled.")
-        run_job(dry_run=True)
-        return
-
-    if args.now:
-        run_job()
-        return
-
-    # ---- Normal mode: poller thread + daily scheduler ----
-    log.info("Starting Telegram update poller…")
-    poller.register_run_job(run_job)
-    poller.start()
+LABEL_ICON = {"security": "🔴", "feature": "🟢"}
+LABEL_TAG  = {"security": "#security #CVE", "feature": "#feature #kernel"}
  
-    _schedule_job(config.SCHEDULE_TIME, run_job)
+THREAD_SEPARATOR = "\n\n<hr/>\n\n"
+
+# ------------------------------------------------------------------ #
+#  Formatting                                                        #
+# ------------------------------------------------------------------ #
  
-    log.info("Bot is running. Send /start to the bot on Telegram to subscribe.")
-    log.info("Press Ctrl-C to stop.")
+def _h(text: str) -> str:
+    """Minimal HTML escaping for user-supplied strings."""
+    return html.escape(text)
+ 
+ 
+def _format_thread(thread: scraper.Thread) -> str:
+    icon     = LABEL_ICON.get(thread.label, "⚪")
+    tags     = LABEL_TAG.get(thread.label, "")
+    date_str = thread.updated.strftime("%Y-%m-%d %H:%M UTC")
+ 
+    lines = [
+        f'{icon} <b>{_h(thread.title)}</b>',
+        f'📋 <code>{_h(thread.list_name)}</code>  '
+        f'👤 {_h(thread.author)}  🕐 {_h(date_str)}',
+    ]
+    if thread.summary:
+        snip = thread.summary[:160].replace("\n", " ")
+        lines.append(f"<i>{_h(snip)}</i>")
+    lines.append(f'<a href="{thread.url}">🔗 View thread</a>  {tags}')
+ 
+    return "\n".join(lines)
+ 
+ 
+def _format_header(total: int) -> str:
+    now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    return (
+        f"🐧 <b>Kernel Lore Daily Digest</b>\n"
+        f"<i>{now}</i> — <b>{total}</b> new thread(s)\n\n"
+    )
+ 
+# ------------------------------------------------------------------ #
+#  Batching                                                            #
+# ------------------------------------------------------------------ #
+ 
+def _build_batches(threads: list[scraper.Thread]) -> Generator[str, None, None]:
+    """
+    Pack threads into as few messages as possible, splitting only on
+    thread boundaries so no thread is ever truncated.
+    Each batch is guaranteed to be ≤ TELEGRAM_MAX_CHARS characters.
+    """
+
+    msg: str = _format_header(len(threads))
+    current: str = None
+    need_sep = False
+
+    for thread in threads:
+        current = _format_thread(thread)
+        needed = len(current)
+        if need_sep:
+            need_sep += len(THREAD_SEPARATOR)
+
+        if len(msg) + needed > TELEGRAM_MAX_CHARS:
+            yield msg
+            msg = current
+            if need_sep:
+                msg += THREAD_SEPARATOR
+        else:
+            msg += current
+            if need_sep:
+                msg += THREAD_SEPARATOR
+            need_sep = True
+
+    yield msg
+
+# ------------------------------------------------------------------ #
+#  Scrape Job                                                        #
+# ------------------------------------------------------------------ #
+
+async def send_to(bot: Bot, chat_id: int, text: str) -> bool:
+    """Send one HTML message to one chat. Returns True on success."""
     try:
-        while True:
-            schedule.run_pending()
-            time.sleep(30)
-    except KeyboardInterrupt:
-        log.info("Shutting down…")
-        poller.stop()
-        log.info("Stopped.")
-
-
-def _check_config() -> None:
-    errors = []
-    if config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        errors.append("TELEGRAM_BOT_TOKEN is not set (config.py or Docker secret)")
-    if not config.WATCHED_LISTS:
-        errors.append("WATCHED_LISTS is empty — add at least one list")
-    if errors:
-        for e in errors:
-            log.error("Config error: %s", e)
-        sys.exit(1)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+        return True
+    except Forbidden:
+        log.warning("chat_id=%d blocked the bot — will unsubscribe", chat_id)
+        return False
+    except TelegramError as exc:
+        log.error("Telegram error sending to chat_id=%d: %s", chat_id, exc)
+        return False
  
+
+async def broadcast_new_threads(context: ContextTypes.DEFAULT_TYPE):
+    chat_ids = subscribers.load()
+    if not chat_ids:
+        log.info("No subscribers yet — nothing to send.")
+        return
+
+    threads = scraper.fetch_new_threads()
+    if not threads:
+        log.info("No new threads to send.")
+        return
+
+    log.info(
+        "Broadcasting %d thread(s) to %d subscriber(s)",
+        len(threads), len(chat_ids),
+    )
+
+    all_blocked: set[int] = set()
+    total_sent = 0
+    for i, msg in enumerate(_build_batches(threads), start=1):
+        for chat_id in chat_ids:
+            ok = await send_to(context.bot, chat_id, msg)
+            if ok:
+                total_sent += 1
+            else:
+                all_blocked.add(chat_id)
  
-def _schedule_job(time_str: str, job) -> None:
-    log.info("Digest scheduled daily at %s UTC", time_str)
-    schedule.every().day.at(time_str, "UTC").do(job)
+        log.debug("Batch #%d done", i)
+        time.sleep(0.1)
+
+    if all_blocked:
+        subscribers.remove_many(all_blocked)
+        log.info("Auto-removed %d blocked subscriber(s)", len(all_blocked))
+ 
+    log.info("Broadcast complete — %d total send(s)", total_sent)
+
+# ------------------------------------------------------------------ #
+#  Command Handlers                                                  #
+# ------------------------------------------------------------------ #
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id    = update.effective_chat.id
+    first_name = update.effective_user.first_name or "there"
+    is_new     = subscribers.add(chat_id)
+ 
+    if is_new:
+        log.info("/start from %s (chat=%d) — subscribed", first_name, chat_id)
+        await update.message.reply_html(
+            f"👋 <b>Welcome to Kernel Lore Bot!</b>\n\n"
+            f"You'll receive a daily digest of interesting Linux kernel threads:\n"
+            f"🔴 Security fixes &amp; CVEs\n"
+            f"🟢 New features &amp; patches\n\n"
+            f"Commands:\n"
+            f"<code>/start</code>  — subscribe to the daily digest\n"
+            f"<code>/stop</code>   — unsubscribe\n"
+            f"<code>/status</code> — check your subscription status\n"
+        )
+    else:
+        await update.message.reply_text(
+            "✅ You're already subscribed! "
+            "You'll receive the next digest at the scheduled time."
+        )
+
+async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id    = update.effective_chat.id
+    first_name = update.effective_user.first_name or "there"
+    was_subbed = subscribers.remove(chat_id)
+ 
+    log.info("/stop from %s (chat=%d)", first_name, chat_id)
+ 
+    if was_subbed:
+        await update.message.reply_text(
+            "👋 You've been unsubscribed.\n"
+            "Send /start any time to re-subscribe."
+        )
+    else:
+        await update.message.reply_text("ℹ️ You weren't subscribed.")
+ 
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if chat_id in subscribers.load():
+        await update.message.reply_text("✅ You are subscribed to the daily kernel digest.")
+    else:
+        await update.message.reply_text("❌ You are not subscribed. Send /start to subscribe.")
+ 
+def is_admin(cmd: str, update: Update) -> bool:
+    chat_id    = update.effective_chat.id
+    first_name = update.effective_user.first_name or "someone"
+
+    if chat_id != config.ADMIN_CHAT_ID:
+        log.warning(
+            "/%s ignored for %s (chat=%d) — not admin", 
+            cmd,
+            first_name,
+            chat_id
+        )
+        return False
+    return True
 
 
-if __name__ == "__main__":
-    main()
+async def scrape(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id    = update.effective_chat.id
+    first_name = update.effective_user.first_name or "someone"
+
+    if not is_admin("scrape", update):
+        return
+
+    log.info("/scrape triggered by %s (chat=%d)", first_name, chat_id)
+    await update.message.reply_text("🔧 scraping feeds now...")
+ 
+    try:
+        await broadcast_new_threads(context)
+        await update.message.reply_text("✅ Debug run complete.")
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Error during /debug run_job: %s", exc)
+        await update.message.reply_text(f"❌ Run failed: {str(exc)[:200]}")
+
+
+async def purge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pass
+
+
+async def set_command_menus(app: Application) -> None:
+    """
+    Set the Telegram command menu:
+    - All users see: /start, /stop, /status
+    - Admin chat additionally sees: /scrape
+ 
+    Called once at startup via post_init.
+    """
+    public_commands = [
+        ("start",  "Subscribe to the daily kernel digest"),
+        ("stop",   "Unsubscribe"),
+        ("status", "Check your subscription status"),
+    ]
+ 
+    await app.bot.set_my_commands(public_commands)
+ 
+    if config.ADMIN_CHAT_ID != 0:
+        await app.bot.set_my_commands(
+            public_commands + [("scrape", "Trigger an immediate scrape")],
+            scope=BotCommandScopeChat(chat_id=config.ADMIN_CHAT_ID),
+        )
+
+
+def run_bot():
+    app = (
+            ApplicationBuilder()
+            .token(config.TELEGRAM_BOT_TOKEN)
+            .post_init(set_command_menus)
+            .build()
+    )
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stop", stop))
+    app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("scrape", scrape))
+    app.add_handler(CommandHandler("purge", purge))
+
+    app.job_queue.run_daily(broadcast_new_threads, config.SCHEDULE_TIME)
+
+    log.info("Bot is running. Send /start to the bot on Telegram to subscribe.")
+
+    app.run_polling(drop_pending_updates=True)

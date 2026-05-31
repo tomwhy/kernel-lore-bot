@@ -14,6 +14,8 @@
 #   3. Hardcoded value below             (last resort / plain runs)
 import os 
 import pathlib
+import datetime
+import zoneinfo
 
 def _read_secret(name: str, fallback: str = "") -> str:
     secret_path = f"/run/secrets/{name}"
@@ -35,8 +37,8 @@ ADMIN_CHAT_ID: int = int(os.environ.get("ADMIN_CHAT_ID", "0"))
 # -----------------------------------------------------------
 # Scraping schedule
 # -----------------------------------------------------------
-# run every day at 08:00 UTC
-SCHEDULE_TIME = "08:00"
+# run every day at 00:00 IST
+SCHEDULE_TIME = datetime.time(hour=0, tzinfo=zoneinfo.ZoneInfo("Asia/Jerusalem"))
 
 # How many hours back to look for "new" posts on first run
 # (prevents a flood of old messages on initial startup)

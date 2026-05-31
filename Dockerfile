@@ -11,4 +11,4 @@ COPY . .
 VOLUME ["/app/data"]
 ENV KERNEL_BOT_STATE_DIR=/app/data
 
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]
