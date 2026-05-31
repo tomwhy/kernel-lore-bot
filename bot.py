@@ -14,6 +14,7 @@ import logging
 from telegram import Update, Bot, BotCommandScopeChat
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Application
+from telegram.error import Forbidden, TelegramError
 from typing import Callable, Generator
 import datetime
 import html
@@ -34,7 +35,7 @@ TELEGRAM_MAX_CHARS = 4096   # Telegram hard limit per message
 LABEL_ICON = {"security": "🔴", "feature": "🟢"}
 LABEL_TAG  = {"security": "#security #CVE", "feature": "#feature #kernel"}
  
-THREAD_SEPARATOR = "\n\n<hr/>\n\n"
+THREAD_SEPARATOR = "\n\n" + "─" * 19 + "\n\n"
 
 # ------------------------------------------------------------------ #
 #  Formatting                                                        #
@@ -89,17 +90,15 @@ def _build_batches(threads: list[scraper.Thread]) -> Generator[str, None, None]:
         current = _format_thread(thread)
         needed = len(current)
         if need_sep:
-            need_sep += len(THREAD_SEPARATOR)
+            needed += len(THREAD_SEPARATOR)
 
         if len(msg) + needed > TELEGRAM_MAX_CHARS:
             yield msg
             msg = current
-            if need_sep:
-                msg += THREAD_SEPARATOR
         else:
-            msg += current
             if need_sep:
                 msg += THREAD_SEPARATOR
+            msg += current
             need_sep = True
 
     yield msg
