@@ -14,7 +14,6 @@ from typing import Optional
 import requests
 
 import config
-import state
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +148,6 @@ def fetch_all_feeds() -> list[Thread]:
 def fetch_new_threads(dry: bool = False) -> list[Thread]:
     log.info("=== Kernel Lore scrape started ===")
 
-    seen = state.load_seen()
     all_interesting = fetch_all_feeds()
 
     # Get new threads from the last 24 hours
@@ -157,18 +155,8 @@ def fetch_new_threads(dry: bool = False) -> list[Thread]:
     log.info("limiting to threads newer than %dh (cutoff %s)",
              config.LOOPBACK_HOURS, cutoff.strftime("%Y-%m-%d %H:%M"))
     new_threads = filter(lambda t: t.updated >= cutoff, all_interesting)
-
-    # Filter out already-seen threads
-    new_threads = filter(lambda t: t.id not in seen, new_threads)
     new_threads = list(new_threads)
     
-    # Persist state
-    if not dry:
-        seen.update(t.id for t in new_threads)
-        by_id = {t.id: t for t in all_interesting}
-        seen = state.prune_old(seen, by_id)
-        state.save_seen(seen)
-
     log.info("New interesting threads: %d", len(new_threads))
     log.info("=== Scrape complete ===")
     return new_threads

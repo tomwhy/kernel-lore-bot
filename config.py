@@ -129,5 +129,4 @@ REQUEST_TIMEOUT        = 15   # HTTP timeout per feed
 # State file (tracks seen thread IDs across runs)
 # -----------------------------------------------------------
 STATE_DIR = pathlib.Path(os.environ.get("KERNEL_BOT_STATE_DIR", "data"))
-STATE_FILE = STATE_DIR / "seen_threads.json"
 SUBSCRIBERS_FILE = STATE_DIR / "subscribers.json"
