@@ -67,56 +67,198 @@ WATCHED_LISTS = [
 # Case-insensitive substring match.
 # -----------------------------------------------------------
 
-# Security / CVE keywords → shown with 🔴 label
+# -----------------------------------------------------------
+# Relevance filtering
+# Threads whose subject matches ANY keyword below are kept.
+# Case-insensitive substring match.
+# Security takes priority over feature when both match.
+# -----------------------------------------------------------
+
+# 🔴 Security / CVE — ordered from most to least specific
 SECURITY_KEYWORDS = [
+    # CVE references (kernel became its own CNA in 2024 — volume is high)
     "CVE-",
-    "vulnerability",
-    "vuln",
-    "exploit",
-    "RCE",
-    "privilege escal",
+    "fix CVE",
+    "fixes CVE",
+
+    # Exploit primitive keywords (what actually shows up in subject lines)
     "use-after-free",
     "UAF",
-    "out-of-bounds",
-    "OOB",
     "heap overflow",
     "stack overflow",
     "buffer overflow",
-    "race condition",
-    "KASAN",
-    "UBSAN",
+    "out-of-bounds",
+    "OOB write",
+    "OOB read",
+    "integer overflow",
+    "integer underflow",
+    "type confusion",
+    "double free",
     "null deref",
+    "null pointer deref",
+    "wild pointer",
+    "dangling pointer",
+
+    # Memory safety sanitizers (patches triggered by these are nearly always security-related)
+    "KASAN",
+    "KMSAN",
+    "UBSAN",
+    "KCSAN",
+    "syzbot",       # automated fuzzer — almost always a bug fix
+    "syzkaller",
+
+    # Attack class / impact keywords
+    "privilege escal",
+    "privesc",
+    "local privilege",
+    "container escape",
+    "sandbox escape",
+    "arbitrary code exec",
+    "RCE",
+    "remote code exec",
+    "information leak",
+    "info leak",
+    "infoleak",
+    "kernel leak",
+    "memory leak",      # narrower than it looks in kernel context
+    "race condition",   # very common kernel bug class
+    "TOCTOU",
     "memory corruption",
+    "memory safety",
+
+    # Stable/security tree signals
     "security fix",
-    "fix CVE",
+    "security patch",
+    "[stable]",         # backport to stable tree
+    "Cc: stable",
+    "regression fix",   # regressions in security subsystems matter
+
+    # Subsystem-level signals
+    "selinux:",
+    "apparmor:",
+    "smack:",
+    "seccomp:",
+    "landlock:",
+    "integrity:",
+    "ima:",             # Integrity Measurement Architecture
+    "keys:",            # kernel keyring vulnerabilities
+    "audit:",
 ]
 
-# New-feature / subsystem keywords → shown with 🟢 label
+# 🟢 New features / subsystem work — structured by signal type
 FEATURE_KEYWORDS = [
-    "[PATCH",
-    "[RFC",
-    "add support",
+    # Canonical subject prefixes (most reliable signal)
+    "[PATCH]",
+    "[PATCH v",         # versioned patch: [PATCH v2], [PATCH v3] ...
+    "[RFC]",
+    "[RFC PATCH]",
+    "[RFC v",
+    "[GIT PULL]",       # maintainer pull request to Linus
+    "[RESEND]",         # resent patches are still new features
+
+    # Patch cover letters (multi-patch series always has one)
+    "[PATCH 0/",        # cover letter: [PATCH 0/N]
+    "[RFC 0/",
+
+    # Driver / hardware
+    "new driver",
+    "add driver",
+    "add support for",
+    "add support of",
+    "enable support",
+    "initial support",
     "introduce",
     "implement",
-    "new driver",
-    "new subsystem",
-    "enable",
-    "feature:",
-    "perf:",
-    "mm:",
+
+    # Subsystem prefixes (kernel convention: "subsystem: description")
+    # Networking
     "net:",
+    "netdev:",
+    "wifi:",
+    "bluetooth:",
+    "tcp:",
+    "udp:",
+    "ipv6:",
+
+    # Storage & filesystems
     "fs:",
-    "sched:",
-    "bpf:",
+    "ext4:",
+    "btrfs:",
+    "xfs:",
+    "nfs:",
     "io_uring:",
+    "block:",
+    "nvme:",
+    "scsi:",
+
+    # Memory management
+    "mm:",
+    "mmap:",
+    "vmalloc:",
+    "hugetlb:",
+    "swap:",
+
+    # Scheduler & CPU
+    "sched:",
+    "cpufreq:",
+    "cpuidle:",
+    "thermal:",
+    "perf:",
+
+    # Virtualization & containers
+    "kvm:",
+    "virtio:",
+    "vhost:",
+    "cgroup:",
+    "namespaces:",
+
+    # eBPF / tracing
+    "bpf:",
+    "xdp:",
+    "tracing:",
+    "ftrace:",
+    "kprobes:",
+
+    # Graphics & display
     "drm:",
+    "dma-buf:",
+    "fbdev:",
+
+    # Rust in the kernel
+    "rust:",
+
+    # Architecture ports
     "arm64:",
     "x86:",
     "riscv:",
-    "kvm:",
-    "virtio:",
-    "rust:",
-    "[GIT PULL]",
+    "loongarch:",
+    "powerpc:",
+    "s390:",
+    "mips:",
+
+    # Device / platform
+    "dts:",             # device tree source additions
+    "dt-bindings:",
+    "platform:",
+    "acpi:",
+    "pci:",
+    "usb:",
+    "gpio:",
+    "i2c:",
+    "spi:",
+    "iio:",
+
+    # Explicit feature language
+    "add new",
+    "new feature",
+    "new subsystem",
+    "new syscall",
+    "extend",
+    "rework",
+    "refactor",         # architectural changes worth tracking
+    "convert to",       # e.g. "convert to folio API"
+    "wire up",
+    "cleanup series",   # large cleanups often precede new features
 ]
 
 # -----------------------------------------------------------
