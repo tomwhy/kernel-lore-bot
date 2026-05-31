@@ -113,7 +113,7 @@ def fetch_feed(list_name: str, url: str) -> list[Thread]:
 
             label = _classify(title)
 
-            yield Thread(
+            threads.append(Thread(
                 id=eid,
                 title=title,
                 url=thread_url,
@@ -122,7 +122,7 @@ def fetch_feed(list_name: str, url: str) -> list[Thread]:
                 list_name=list_name,
                 label=label,
                 summary=summary,
-            )
+            ))
         except Exception as exc:  # noqa: BLE001
             log.debug("Skipping malformed entry: %s", exc)
             continue
@@ -139,12 +139,11 @@ def fetch_all_feeds() -> list[Thread]:
     for list_name, url in config.WATCHED_LISTS:
         threads = fetch_feed(list_name, url)
         threads = filter(lambda t: t not in interesting, threads)
-        threads = filter(lambda t: t.label, threads)
         interesting.extend(threads)
         time.sleep(config.REQUEST_DELAY_SECONDS)
 
     # Sort: security first, then by date desc
-    interesting.sort(key=lambda t: (t.label != "security", -t.updated.timestamp()))
+    interesting.sort(key=lambda t: (t.label != "security", t.label != "feature", -t.updated.timestamp()))
     return interesting
 
 

@@ -33,7 +33,6 @@ log = logging.getLogger(__name__)
 TELEGRAM_MAX_CHARS = 4096   # Telegram hard limit per message
 
 LABEL_ICON = {"security": "🔴", "feature": "🟢"}
-LABEL_TAG  = {"security": "#security #CVE", "feature": "#feature #kernel"}
  
 THREAD_SEPARATOR = "\n\n" + "─" * 19 + "\n\n"
 
@@ -48,7 +47,6 @@ def _h(text: str) -> str:
  
 def _format_thread(thread: scraper.Thread) -> str:
     icon     = LABEL_ICON.get(thread.label, "⚪")
-    tags     = LABEL_TAG.get(thread.label, "")
     date_str = thread.updated.strftime("%Y-%m-%d %H:%M UTC")
  
     lines = [
@@ -59,7 +57,7 @@ def _format_thread(thread: scraper.Thread) -> str:
     if thread.summary:
         snip = thread.summary[:160].replace("\n", " ")
         lines.append(f"<i>{_h(snip)}</i>")
-    lines.append(f'<a href="{thread.url}">🔗 View thread</a>  {tags}')
+    lines.append(f'<a href="{thread.url}">🔗 View thread</a>')
  
     return "\n".join(lines)
  

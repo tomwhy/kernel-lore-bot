@@ -47,6 +47,7 @@ def _dry_run() -> None:
         print(f"  {icon} [{t.list_name}] {t.title}")
         print(f"     by {t.author} — {t.updated.strftime('%Y-%m-%d %H:%M UTC')}")
         print(f"     {t.url}")
+        print(f"     {t.in_reply_to}")
         print()
 
 
@@ -59,7 +60,7 @@ def main() -> None:
     parser.add_argument("--dry", action="store_true", help="Dry-run: print, don't send")
     args = parser.parse_args()
 
-    _check_config()
+    _check_config(args)
 
     if args.dry:
         _dry_run()
@@ -70,9 +71,9 @@ def main() -> None:
     bot.run_bot()
 
 
-def _check_config() -> None:
+def _check_config(args) -> None:
     errors = []
-    if config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+    if not args.dry and config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
         errors.append("TELEGRAM_BOT_TOKEN is not set (config.py or Docker secret)")
     if not config.WATCHED_LISTS:
         errors.append("WATCHED_LISTS is empty — add at least one list")
