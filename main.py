@@ -45,6 +45,8 @@ def _dry_run() -> None:
         badge = "🆕" if t.status == "new" else "🔄"
         print(f"  {badge} {t.title}")
         print(f"     by {t.author} — {t.updated.strftime('%Y-%m-%d %H:%M UTC')}")
+        if t.mailing_list:
+            print(f"     📬 {t.mailing_list}")
         print(f"     {t.url}")
         if len(t.roots) > 1:
             print(f"     ({len(t.roots)} roots)")

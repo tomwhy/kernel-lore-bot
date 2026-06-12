@@ -1,0 +1,1192 @@
+
+[DRY RUN] 227 thread(s) would be sent to 0 subscriber(s):
+
+  🆕 [PATCH BlueZ] emulator: btvirt: support debug for -s socket server
+     by Pauli Virtanen — 2026-06-13 18:20 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/11cf79f1f980e5da2202f84bf66e3847048cc34d.1781363977.git.pav@iki.fi
+
+  🆕 [PATCH net] appletalk: aarp: fix proxy probe conflict lookup
+     by Yizhou Zhao — 2026-06-13 23:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613150104.1985-1-zhaoyz24@mails.tsinghua.edu.cn
+
+  🆕 [PATCH v2 1/1] exfat: preserve the next empty-entry hint after allocation
+     by Yang Wen — 2026-06-13 21:39 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260613133938.239009-1-anmuxixixi@gmail.com
+
+  🆕 [PATCH v2 0/1] exfat: reduce directory scans during file creation
+     by Yang Wen — 2026-06-13 21:38 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260613133856.238740-1-anmuxixixi@gmail.com
+
+  🆕 [PATCH] media: i2c: rdacm21: Fix missing media_entity_cleanup()
+     by Biren Pandya — 2026-06-13 18:53 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260613132306.69394-1-birenpandya@gmail.com
+
+  🆕 ALSA: hda/realtek: headphone jack mic not working on ASUS Zenbook 14
+     by Hridesh MG — 2026-06-13 18:49 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/CALiyAo=RSmoWFH-zqMQWEWtU-qMeTP8YPkzPFCzNsGtFmtn_xQ@mail.gmail.com
+
+  🆕 [PATCH] media: i2c: ov772x: fix memory leak in probe error path
+     by Biren Pandya — 2026-06-13 18:37 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260613130734.68983-1-birenpandya@gmail.com
+
+  🆕 [PATCH 0/2] security/keys: replace BUG() in unreachable default cases
+     by Mohammed EL Kadiri — 2026-06-13 14:04 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260613130408.13709-1-med08elkadiri@gmail.com
+
+  🆕 [PATCH v3] flow_dissector: fix uninit-value in __skb_flow_dissect() for ETH_ADDRS
+     by Yun Zhou — 2026-06-13 19:31 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613113154.2550286-1-yun.zhou@windriver.com
+
+  🆕 [PATCH net-next 0/8] net: mdio: realtek-rtl9300: Add RTL83xx support
+     by Markus Stockhausen — 2026-06-13 13:29 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613112946.1071411-1-markus.stockhausen@gmx.de
+
+  🆕 [PATCH v2] media: i2c: ov02a10: fix endpoint parsing use-after-free and error leak
+     by Biren Pandya — 2026-06-13 16:59 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260613112920.64617-1-birenpandya@gmail.com
+
+  🆕 [RFC PATCH 0/8] namespace-aware configfs
+     by Hannes Reinecke — 2026-06-13 13:14 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260613111437.101763-1-hare@kernel.org
+
+  🆕 [PATCH nf 0/1] netfilter: xt_nat: bridge nft_compat rule can trigger NULL-deref
+     by Ren Wei — 2026-06-13 18:27 UTC
+     📬 netfilter-devel
+     https://lore.kernel.org/all/cover.1781144570.git.bronzed_45_vested@icloud.com
+
+  🆕 [PATCH net] ice: Fix use-after-scope in ice_sched_add_nodes_to_layer()
+     by NeKon69 — 2026-06-13 13:14 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613101440.80190-1-nobodqwe@gmail.com
+
+  🆕 [PATCH net-next v4] ixgbe: implement get_queue_stats_rx
+     by Kshitiz Bartariya — 2026-06-13 14:42 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613091231.26601-1-kshitiz.bartariya@zohomail.in
+     (2 roots)
+
+  🆕 [PATCH] media: i2c: mt9p031: fix endpoint parsing use-after-free
+     by Biren Pandya — 2026-06-13 14:18 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260613084849.57897-1-birenpandya@gmail.com
+
+  🆕 [PATCH] media: i2c: ov02a10: fix endpoint parsing use-after-free and error leak
+     by Biren Pandya — 2026-06-13 14:02 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260613083235.57363-1-birenpandya@gmail.com
+
+  🆕 [PATCH] dt-bindings: sound: nvidia,tegra30-ahub: Convert to DT
+ schema
+     by Charan Pedumuru — 2026-06-13 08:24 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260613-nvidia-ahub-v1-1-5b7e85301736@gmail.com
+
+  🆕 [syzbot] [bluetooth?] INFO: trying to register non-static key in bt_accept_unlink
+     by syzbot — 2026-06-13 01:24 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/6a2d13b2.428ffe26.258b27.0164.GAE@google.com
+
+  🆕 [PATCH v2] net: pch_gbe: handle TX skb allocation failure
+     by Ruoyu Wang — 2026-06-13 16:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613080043.873027-1-ruoyuw560@gmail.com
+
+  🆕 [PATCH] Input: cyapa - bound the SMBus block reads to the caller
+ buffer
+     by Bryam Vargas via B4 Relay — 2026-06-13 01:12 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260613-b4-disp-8e550272-v1-1-9658cf8292c2@proton.me
+     (2 roots)
+
+  🆕 [PATCH] apparmor: fix use-after-free in policy replacement path
+     by Junxiao Chang — 2026-06-13 14:04 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260613060424.2213712-1-junxiao.chang@intel.com
+
+  🆕 [PATCH] Input: synaptics-rmi4 - bound the SMBus block read to the
+ caller buffer
+     by Bryam Vargas via B4 Relay — 2026-06-13 00:39 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260613-b4-disp-2e033955-v1-1-43ab7281667a@proton.me
+     (2 roots)
+
+  🆕 [syzbot] [net?] possible deadlock in udp_sendmsg (2)
+     by syzbot — 2026-06-12 21:22 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2cdafe.428ffe26.258b27.0161.GAE@google.com
+
+  🆕 [PATCH] Input: mms114 - reject an oversized device packet size
+     by Bryam Vargas via B4 Relay — 2026-06-12 23:21 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612-b4-disp-dc4b8dc4-v1-1-d7cb0a828d92@proton.me
+     (2 roots)
+
+  🆕 [PATCH net-next v6 0/4] net: dsa: mxl862xx: SerDes ports
+     by Daniel Golle — 2026-06-13 04:07 UTC
+     📬 netdev
+     https://lore.kernel.org/all/cover.1781319534.git.daniel@makrotopia.org
+
+  🆕 [PATCH] Input: goodix - clamp the device-reported contact count
+     by Bryam Vargas via B4 Relay — 2026-06-12 21:10 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612-b4-disp-6844625d-v1-1-df0aed080c9d@proton.me
+     (2 roots)
+
+  🆕 [syzbot] [fs?] memory leak in path_openat (3)
+     by syzbot — 2026-06-12 18:28 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/6a2cb238.be3f099c.2836ae.0006.GAE@google.com
+
+  🆕 [PATCH net-next v2 0/8] net: dsa: mt7530: modernise register access
+ and add two DSA ops
+     by Daniel Golle — 2026-06-13 02:10 UTC
+     📬 netdev
+     https://lore.kernel.org/all/cover.1781312667.git.daniel@makrotopia.org
+
+  🆕 [PATCH net] ip_tunnel: drop stale dst from generated PMTU ICMP
+ replies
+     by Laika Price via B4 Relay — 2026-06-13 02:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260613-master-v1-1-df796e8e2d74@gmail.com
+     (2 roots)
+
+  🆕 [PATCH] net: airoha: Fix typos in comments and Kconfig
+     by Wayen.Yan — 2026-06-13 08:41 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2ca74a.c5b1db4e.21a698.01e7@mx.google.com
+
+  🆕 [PATCH] net: airoha: Fix always-true condition in PPE1 queue
+ reservation loop
+     by Wayen.Yan — 2026-06-13 08:23 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2ca3de.ad59c0a6.147df9.2ac1@mx.google.com
+
+  🆕 [PATCH] net: airoha: Fix non-standard return value in
+ airoha_ppe_get_wdma_info()
+     by Wayen.Yan — 2026-06-13 08:22 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2ca3d9.ad59c0a6.147df9.2a62@mx.google.com
+
+  🆕 [PATCH v2] jfs: validate active AG before updating db_active
+     by Kyle Zeng — 2026-06-12 16:41 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612234135.47450-1-kylebot@openai.com
+
+  🆕 [PATCH iproute2-next] ipaddress: add support for showing IPv4 devconf attributes
+     by Fernando Fernandez Mancera — 2026-06-13 01:27 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612232703.31150-1-fmancera@suse.de
+     (2 roots)
+
+  🆕 [PATCH] mailmap: add entry for Jesse Brandeburg
+     by Jesse Brandeburg — 2026-06-12 15:47 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612224727.141614-1-jbrandeb@kernel.org
+
+  🆕 [PATCH] drivers: net and video: remove legacy 16-bit and non-x86 hardware drivers
+     by Gabriel Ramos Barbosa Mota — 2026-06-12 19:31 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612223208.590838-1-maguraa53@gmail.com
+     (2 roots)
+
+  🆕 [PATCH] hwspinlock: annotate slot pointer as RCU sensitive
+     by Wolfram Sang — 2026-06-13 00:27 UTC
+     📬 rcu
+     https://lore.kernel.org/all/20260612223002.13121-2-wsa+renesas@sang-engineering.com
+
+  🆕 [PATCH] Input: tsc2007 - Read "ti,poll-period" as u32
+     by Rob Herring (Arm) — 2026-06-12 16:50 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612215033.1885245-1-robh@kernel.org
+
+  🆕 [PATCH] ASoC: dt-bindings: Fix RT5677 "realtek,gpio-config" type
+     by Rob Herring (Arm) — 2026-06-12 16:49 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260612214911.1883234-1-robh@kernel.org
+
+  🆕 [PATCH] ASoC: Match DT helper types
+     by Rob Herring (Arm) — 2026-06-12 16:49 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260612214904.1882991-1-robh@kernel.org
+     (2 roots)
+
+  🆕 Please apply e1b849cfa6b61f1c866a908c9e8dd9b5aaab820b to 6.12.y
+     by Josef Bacik — 2026-06-12 17:21 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612212134.GA3841315@perftesting
+
+  🆕 [PATCH net-next v2 0/2] netdev: expose page pool order via netlink
+     by Dragos Tatulea — 2026-06-13 00:17 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/20260612211709.1456966-2-dtatulea@nvidia.com
+
+  🆕 [PATCH 6.18.y] KVM: VMX: Update SVI during runtime APICv activation
+     by Jon Kohler — 2026-06-12 14:10 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612211003.2503400-1-jon@nutanix.com
+
+  🆕 [PATCH v4 00/10] fuse: add io-uring buffer pools and zero-copy
+     by Joanne Koong — 2026-06-12 14:05 UTC
+     📬 fuse-devel
+     https://lore.kernel.org/all/20260612210513.1516038-1-joannelkoong@gmail.com
+
+  🆕 [PATCH net-next 0/3] net: bcmgenet: collapse TX priority queues
+     by Nicolai Buchwitz — 2026-06-12 22:59 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612205915.3156127-1-nb@tipi-net.de
+
+  🆕 [syzbot] [mm?] KASAN: invalid-free in rcu_free_sheaf
+     by syzbot — 2026-06-12 13:43 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2c6f6a.be3f099c.2836ae.0004.GAE@google.com
+
+  🆕 [PATCH 6.1.y] netfilter: ctnetlink: ensure safe access to master conntrack
+     by Mark Bundschuh — 2026-06-12 20:39 UTC
+     📬 netfilter-devel
+     https://lore.kernel.org/all/20260612203906.1139574-1-mkbund@amazon.com
+
+  🆕 [PATCH for-next] io_uring/net: make POLL_FIRST receive side checks
+ consistent
+     by Jens Axboe — 2026-06-12 14:35 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/a8ae874c-1fdf-49f6-abbc-a4dff3a7d679@kernel.dk
+
+  🆕 [PATCH 6.6.y] netfilter: ctnetlink: ensure safe access to master conntrack
+     by Mark Bundschuh — 2026-06-12 20:24 UTC
+     📬 netfilter-devel
+     https://lore.kernel.org/all/20260612202408.1045757-1-mkbund@amazon.com
+
+  🆕 [PATCH v6 0/7] Add support for MT6392 PMIC
+     by Luca Leonardo Scorcia — 2026-06-12 22:04 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612200717.361018-1-l.scorcia@gmail.com
+
+  🆕 [PATCH v1 0/4] This series adds support for the Qualcomm JPEG V4L2 mem2mem encoder.
+     by Atanas Filipov — 2026-06-12 22:44 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260612194417.1737009-1-atanas.filipov@oss.qualcomm.com
+
+  🆕 [PATCH v2] exfat: bound uniname advance in exfat_find_dir_entry()
+     by Bryam Vargas via B4 Relay — 2026-06-12 14:29 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260612-b4-disp-d3abc2b6-v2-1-258241593ae4@proton.me
+     (2 roots)
+
+  🆕 [PATCH] jfs: fix use-after-free in jfs_readdir on legacy non-indexed directories
+     by Jenny Guanni Qu — 2026-06-13 04:12 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612191204.95876-1-qguanni@gmail.com
+
+  🆕 + ocfs2-avoid-moving-extents-to-occupied-clusters.patch added to mm-nonmm-unstable branch
+     by Andrew Morton — 2026-06-12 12:10 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612191031.337831F000E9@smtp.kernel.org
+
+  🆕 [PATCH 6.12.y] netfilter: ctnetlink: ensure safe access to master conntrack
+     by Mark Bundschuh — 2026-06-12 19:07 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612190705.909607-1-mkbund@amazon.com
+
+  🆕 [PATCH v7 0/4] io_uring: extend bvec registration
+     by Joanne Koong — 2026-06-12 11:48 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/20260612184840.4058966-1-joannelkoong@gmail.com
+
+  🆕 [PATCH net] sctp: hold socket lock when dumping endpoints in sctp_diag
+     by Xin Long — 2026-06-12 13:59 UTC
+     📬 netdev
+     https://lore.kernel.org/all/1bbd999cf88fb1ea93f4a3743047bce9b51adc24.1781287178.git.lucien.xin@gmail.com
+
+  🆕 [PATCH] smb: client: Simplify conditional compilation in
+ __cifs_do_create()
+     by Markus Elfring — 2026-06-12 19:39 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/6e9c0200-9539-49e2-b667-eeb2b4906d45@web.de
+
+  🆕 [PATCH 1/1] io_uring/bpf-ops: add a separate maintainer entry
+     by Pavel Begunkov — 2026-06-12 18:36 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/d89f3b89e77b09a18daa45476fd1a40f2ee253cd.1780930463.git.asml.silence@gmail.com
+
+  🆕 [PATCH v2] landlock: Set audit_net.sk for socket access checks
+     by =?UTF-8?q?Micka=C3=ABl=20Sala=C3=BCn?= — 2026-06-12 19:27 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260612172757.1003481-1-mic@digikod.net
+
+  🆕 [PATCH] drm/i915/mtl+: Enable PPS before PLL
+     by Imre Deak — 2026-06-12 20:26 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612172617.3427027-1-imre.deak@intel.com
+
+  🆕 [PATCH 0/4] vhost/vsock: add support for VHOST_RESET_OWNER and CPR migration
+     by Andrey Drobyshev — 2026-06-12 19:57 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612165718.433546-1-andrey.drobyshev@virtuozzo.com
+
+  🆕 [PATCH] fbdev: modedb: Fix misaligned fields in the 1920x1080-60 mode
+     by Steffen Persvold — 2026-06-12 18:40 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612164041.3652599-1-spersvold@gmail.com
+
+  🆕 [GIT PULL] io_uring fixes for 7.1-final
+     by Jens Axboe — 2026-06-12 10:27 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/98373ad8-4777-489c-9cef-1ff9227c63a4@kernel.dk
+
+  🆕 [PATCH net-next v3 0/4] net: devmem: allow rx-buf-size > PAGE_SIZE
+ per binding
+     by Bobby Eshleman — 2026-06-12 09:25 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260612-tcpdm-large-niovs-v3-0-a3b693e76fcb@meta.com
+
+  🆕 [PATCH net] tcp: ipv6: clamp default adverting MSS to avoid
+ GSO_BY_FRAGS (0xFFFF)
+     by Eric Dumazet — 2026-06-12 16:25 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612162517.83394-1-edumazet@google.com
+
+  🆕 HFS syzbot BUG: test patch validating metadata before hfs_write_inode()
+     by David Maximiliano Hermitte — 2026-06-12 16:20 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260612162043.1524591-1-davemadmaxxx@gmail.com
+
+  🆕 [syzbot] [net?] general protection fault in skb_segment (5)
+     by syzbot — 2026-06-12 09:19 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6a2c3193.8812e0fc.3c3fa4.0001.GAE@google.com
+
+  🆕 [PATCH v4 1/2] Bluetooth: hci_conn: Fix null ptr deref in hci_abort_conn()
+     by Siwei Zhang — 2026-06-12 12:16 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/20260612161753.3140707-1-oss@fourdim.xyz
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 02/10] docs/zh_CN: add LSM/apparmor Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_F3D55D1A2C8FB266EE628EF8C68C10DEDF09@qq.com
+
+  🆕 [PATCH 00/10] docs/zh_CN: add LSM admin-guide Chinese translation
+     by Yan Zhu — 2026-06-12 23:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/tencent_001080DF135CEE2CD1B260EFA08E3CC71A09@qq.com
+
+  🆕 [PATCH] HID: hidpp: fix potential UAF in hidpp_connect_event()
+     by Jiri Kosina — 2026-06-12 17:48 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/r7qq6043-p432-51o0-3s93-r9382q44n027@xreary.bet
+
+  🆕 [PATCH] proc: only bump parent nlink when registering directories
+     by =?UTF-8?q?Krzysztof=20Wilczy=C5=84ski?= — 2026-06-12 15:30 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260612153031.536525-1-kwilczynski@kernel.org
+
+  🔄 [PATCH v2] mm/kmemleak: avoid soft lockup when scanning task
+ stacks
+     by Breno Leitao — 2026-06-12 08:16 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612-kmemleak-stack-resched-v2-1-53240de79e88@debian.org
+
+  🔄 [PATCH] Bluetooth: L2CAP: fix tx ident leak for commands without a response
+     by Stig Hornang — 2026-06-12 16:38 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/20260612143818.167643-1-stig@hornang.me
+
+  🔄 [PATCH v11 0/1] Bluetooth: L2CAP: Fix use-after-free in l2cap_sock_new_connection_cb()
+     by Siwei Zhang — 2026-06-12 10:34 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/20260612143449.3045055-1-oss@fourdim.xyz
+
+  🔄 [PATCH v1] Bluetooth: 6lowpan: Fix using chan->conn as indication to no remote netdev
+     by Luiz Augusto von Dentz — 2026-06-12 10:29 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/20260612142957.524526-1-luiz.dentz@gmail.com
+
+  🔄 [PATCH 0/3] media: Add fdinfo support for v4l2 drivers
+     by Detlev Casanova — 2026-06-12 10:26 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260612-v4l2-add-fdinfo-v1-0-723211abc861@collabora.com
+     (2 roots)
+
+  🔄 [PATCH v2 0/4] HID: asus: security fixes and more hardware support
+     by Denis Benato — 2026-06-12 14:23 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612142326.1704858-1-denis.benato@linux.dev
+
+  🔄 [PATCH net] tipc: fix UAF in tipc_l2_send_msg()
+     by Eric Dumazet — 2026-06-12 13:59 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612135949.4010482-1-edumazet@google.com
+
+  🔄 [PATCH net-next v2 0/2] net: pse-pd: add Realtek/Broadcom PSE MCU support
+     by Jonas Jelonek — 2026-06-12 13:29 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612132944.460646-1-jelonek.jonas@gmail.com
+
+  🔄 [PATCH] ASoC: hisilicon: Use guard() for spin locks
+     by phucduc.bui@gmail.com — 2026-06-12 19:31 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260612123150.74696-1-phucduc.bui@gmail.com
+
+  🔄 [PATCH 6.12.y v3 0/2] xfrm: hold dev ref until after transport_finish NF_HOOK
+     by Simon Liebold — 2026-06-12 11:13 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612111327.1613710-1-simonlie@amazon.de
+
+  🔄 [PATCH net-next v2 0/3] ptp: Add driver for R-Car Gen4 gPTP timer
+     by =?UTF-8?q?Niklas=20S=C3=B6derlund?= — 2026-06-12 11:28 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612092851.2141782-1-niklas.soderlund+renesas@ragnatech.se
+
+  🔄 [GIT PULL] sound fixes for 7.1-final
+     by Takashi Iwai — 2026-06-12 11:26 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/87cxxwhzxg.wl-tiwai@suse.de
+
+  🔄 [PATCH net-next v1] e1000: Initialize phy_data to avoid unexpected values
+     by Rongguang Wei — 2026-06-12 16:03 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260612080331.120096-1-clementwei90@163.com
+     (2 roots)
+
+  🔄 [PATCH 0/7] ntfs: Support Windows native symbolic links
+     by Hyunchul Lee — 2026-06-12 16:33 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260612-topic-symlink-v1-0-cc1ebf9528e1@gmail.com
+
+  🔄 [PATCH v2 0/9] Input: cap11xx - Add support for CAP1114
+     by Jun Yan — 2026-06-12 15:22 UTC
+     📬 linux-input
+     https://lore.kernel.org/all/20260612072237.1177304-1-jerrysteve1101@gmail.com
+
+  🔄 [PATCH] drm/xe/guc: Fix buffer overflow in steered register list allocation
+     by Tejas Upadhyay — 2026-06-12 12:34 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260612070401.543305-2-tejas.upadhyay@intel.com
+
+  🔄 [PATCH] exfat: bound uniname advance in exfat_find_dir_entry()
+     by Bryam Vargas via B4 Relay — 2026-06-11 22:45 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260611-b4-disp-c0e7d249-v1-1-7f517046abd7@proton.me
+     (2 roots)
+
+  🔄 [PATCHSET v2] Add lockless MPSC FIFO queue for task work
+     by Jens Axboe — 2026-06-11 20:48 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/20260612025125.1690253-1-axboe@kernel.dk
+
+  🔄 [PATCH net-next v5 0/3] airoha: add the capability to configure
+ GDM3/GDM4 as WAN/LAN on demand
+     by Lorenzo Bianconi — 2026-06-11 23:55 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611-airoha-ethtool-priv_flags-v5-0-c11de08486d1@kernel.org
+
+  🔄 [PATCH net v5 0/4] MAC-PHY interrupt changed to level triggered
+ interrupt
+     by Selvamani Rajagopal via B4 Relay — 2026-06-11 14:55 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611-level-trigger-v5-0-4533a9e85ce2@onsemi.com
+     (2 roots)
+
+  🔄 [PATCH] hfsplus: validate thread record before delete key rebuild
+     by Kyle Zeng — 2026-06-11 14:26 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260611212633.5058-1-kylebot@openai.com
+
+  🔄 [PATCH net] net/sched: sch_dualpi2: Add missing module alias
+     by Victor Nogueira — 2026-06-11 17:58 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611205849.3287640-1-victor@mojatatu.com
+
+  🔄 [PATCH v3 net-next 0/5] net: bridge: take care of p->flags accesses
+     by Eric Dumazet — 2026-06-11 20:34 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611203453.3067462-1-edumazet@google.com
+
+  🔄 [PATCH net-next] ethtool: tsconfig: always take rtnl_lock
+     by Jakub Kicinski — 2026-06-11 13:03 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611200355.2020663-1-kuba@kernel.org
+
+  🔄 [PATCH net-next v7 00/11] BIG TCP for UDP tunnels
+     by Alice Mikityanska — 2026-06-11 21:29 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611192955.604661-1-alice.kernel@fastmail.im
+
+  🔄 [PATCH net-next] ptp: ocp: add shutdown callback
+     by Vadim Fedorenko — 2026-06-11 19:03 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611190333.787132-1-vadim.fedorenko@linux.dev
+
+  🔄 [PATCH net-next v2] docs: networking: add guidance on what to push via extack
+     by Jakub Kicinski — 2026-06-11 10:21 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611172149.1877704-1-kuba@kernel.org
+
+  🔄 [PATCH] net: qrtr: fix refcount leak in qrtr_send_resume_tx()
+     by WenTao Liang — 2026-06-12 01:07 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611170756.3590-1-vulab@iscas.ac.cn
+
+  🔄 [PATCH net] ip_tunnel: annotate data-races around t->err_count and t->err_time
+     by Eric Dumazet — 2026-06-11 16:52 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611165247.2710257-1-edumazet@google.com
+
+  🔄 [PATCH] atm: fix skb leak in sigd_send() on a closing listen socket
+     by Weiming Shi — 2026-06-12 00:38 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611163805.2151734-2-bestswngs@gmail.com
+
+  🔄 [PATCH v2 net] virtio_net: do not allow tunnel csum offload for non GSO packets
+     by Paolo Abeni — 2026-06-11 18:36 UTC
+     📬 netdev
+     https://lore.kernel.org/all/6c3b6c47fb05c100f384630dc48f3975cf37b67a.1781195144.git.pabeni@redhat.com
+
+  🔄 [PATCH] posix-cpu-timers: Fix pid refcount leak in do_cpu_nanosleep() error path
+     by WenTao Liang — 2026-06-12 00:17 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260611161738.97043-1-vulab@iscas.ac.cn
+
+  🔄 [PATCH net 0/2] octeontx2: quiesce stale mailbox IRQ state before request_irq()
+     by Runyu Xiao — 2026-06-12 00:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611160014.3202224-1-runyu.xiao@seu.edu.cn
+
+  🔄 [PATCH net-next v3 0/3] ipv6: Honor oif when choosing nexthop for locally generated traffic
+     by Ido Schimmel — 2026-06-11 18:46 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611154605.992528-1-idosch@nvidia.com
+
+  🔄 [PATCH net-next v2 0/4] net: devmem: allow rx-buf-size > PAGE_SIZE
+ per binding
+     by Bobby Eshleman — 2026-06-11 08:28 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260611-tcpdm-large-niovs-v2-0-ee2bf15e7523@meta.com
+
+  🔄 [PATCH v3 net] net: watchdog: fix refcount tracking races
+     by Eric Dumazet — 2026-06-11 15:27 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611152737.2580480-1-edumazet@google.com
+
+  🔄 [PATCH v3] Bluetooth: hci_conn: Fix null ptr deref in hci_abort_conn()
+     by Siwei Zhang — 2026-06-11 11:19 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/20260611152039.2176565-1-oss@fourdim.xyz
+
+  🔄 [PATCH] ASoC: cs35l56: Fix wrong error test on simple_write_to_buffer()
+     by Richard Fitzgerald — 2026-06-11 16:12 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260611151234.1111153-1-rf@opensource.cirrus.com
+
+  🔄 [PATCH] net: ethernet: mtk_wed: fix loading WO firmware for MT7986
+     by Zhi-Jun You — 2026-06-11 23:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611150051.586-1-hujy652@gmail.com
+
+  🔄 [RFC PATCH 0/1] vfs: pass S_IFDIR mode to vfs_prepare_mode()
+     by Jori Koolstra — 2026-06-11 16:57 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260611145733.43776-1-jkoolstra@xs4all.nl
+
+  🔄 [PATCH net] tipc: restrict socket queue dumps in enqueue tracepoints
+     by Li Xiasong — 2026-06-11 21:56 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611135647.3666727-1-lixiasong1@huawei.com
+
+  🔄 [PATCH 1/2] ASoC: SOF: Intel: select SND_SOC_SDW_UTILS=y from SND_SOC_SOF_HDA_GENERIC=y
+     by Arnd Bergmann — 2026-06-11 15:23 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260611132310.137688-1-arnd@kernel.org
+
+  🔄 [PATCH] net: qrtr: fix 32-bit integer overflow in qrtr_endpoint_post()
+     by Michael Bommarito — 2026-06-11 08:54 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611125455.2352279-1-michael.bommarito@gmail.com
+
+  🔄 [PATCH net-next 0/3] Introduce HSR/PRP HW offload support for PRU-ICSSM Ethernet driver
+     by Parvathi Pudi — 2026-06-11 18:03 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611123636.376577-1-parvathi@couthit.com
+
+  🔄 [PATCH net 0/2] net/stmmac: Fixes for maximum TX/RX queues to use
+ by driver
+     by Jakub Raczynski — 2026-06-11 13:33 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611113358.3379518-1-j.raczynski@samsung.com
+
+  🔄 [PATCH v1 0/2] ASoC: qcom: Shikra machine driver and DT binding support
+     by Ajay Kumar Nandam — 2026-06-11 16:59 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260611112946.954172-1-ajay.nandam@oss.qualcomm.com
+
+  🔄 [PATCH v2] ASoC: soc-core: Create device_link to ensure correct suspend order
+     by Richard Fitzgerald — 2026-06-11 12:08 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260611110856.1088110-1-rf@opensource.cirrus.com
+
+  🔄 [PATCH net-next] net: airoha: better handle MIBs for GDM ports
+ with multiple devs attached
+     by Lorenzo Bianconi — 2026-06-11 12:43 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611-airoha-eth-multi-serdes-stats-v1-1-42442ae42064@kernel.org
+
+  🔄 [PATCH net-next v2 0/2] net: remove tls_toe
+     by Sabrina Dubroca — 2026-06-11 12:21 UTC
+     📬 netdev
+     https://lore.kernel.org/all/cover.1781165969.git.sd@queasysnail.net
+
+  🔄 [PATCH net-next v7 0/4] net: rnpgbe: Add TX/RX and link status support
+     by Dong Yibo — 2026-06-11 18:00 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611100036.36370-1-dong100@mucse.com
+
+  🔄 [PATCH net] octeontx2-af: fix NPC mailbox codes in mbox.h
+     by Ratheesh Kannoth — 2026-06-11 14:03 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611083330.1652181-1-rkannoth@marvell.com
+
+  🔄 [PATCH] Documentation: admin-guide: fix bracelets and translation issue
+     by Manuel Ebner — 2026-06-11 09:55 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260611075513.124994-2-manuelebner@mailbox.org
+
+  🔄 [PATCH net-next v2 0/2] virtio_net: xsk: rx and tx wake up
+     by menglong8.dong@gmail.com — 2026-06-11 10:56 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611025644.2431148-1-dongml2@chinatelecom.cn
+
+  🔄 [PATCH] net: mvneta_bm: add suspend/resume to prevent crash after resume
+     by Yun Zhou — 2026-06-11 10:09 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611020935.1933865-1-yun.zhou@windriver.com
+
+  🔄 [PATCH 0/2] io_uring: fix short read links and align link timeout cancel
+     by Yang Xiuwei — 2026-06-11 09:22 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/20260611012236.3020181-1-yangxiuwei@kylinos.cn
+
+  🔄 [PATCH v2] power: supply: charger-manager: fix refcount leak in is_full_charged()
+     by WenTao Liang — 2026-06-11 08:53 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260611005322.53096-1-vulab@iscas.ac.cn
+
+  🔄 [PATCH iwl-net] idpf: decrease statistics refresh interval
+     by Danny Gonzalez — 2026-06-11 00:24 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260611002437.1671401-1-digonzal@google.com
+     (2 roots)
+
+  🔄 [PATCH v2 0/5] mm: Unconditional per-VMA locks and cleanups
+     by Dave Hansen — 2026-06-10 16:04 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610230409.A44D29FA@davehans-spike.ostc.intel.com
+
+  🔄 [PATCH bpf-next 0/5] Verify BPF signed loader at load time
+     by Daniel Borkmann — 2026-06-11 01:03 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260610230329.727075-1-daniel@iogearbox.net
+
+  🔄 [PATCH 1/1] [PATCH] l2tp: fix IPv6 xmit frag failure for oversized non-GSO packets
+     by Angela Yu — 2026-06-11 10:35 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610223557.2765487-1-angela.yu@alliedtelesis.co.nz
+
+  🔄 [PATCH net-next v3 0/5] net: mdio: realtek-rtl9300: Add RTL931x support
+     by Markus Stockhausen — 2026-06-10 21:41 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610194145.4153668-1-markus.stockhausen@gmx.de
+
+  🔄 [PATCH net 0/4] Avoid mistaken parent class deactivation during peek
+     by Victor Nogueira — 2026-06-10 16:28 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610192855.3121513-1-victor@mojatatu.com
+
+  🔄 [PATCH] ALSA: hda/hdmi: disable KAE for Intel Panther Lake
+     by Alexander Kaplan — 2026-06-10 19:48 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260610174834.6301-1-alexander.kaplan@sms-medipool.de
+
+  🔄 [PATCH net 1/1] atm: svc: fix listen state corruption in svc_listen
+     by Ren Wei — 2026-06-11 01:33 UTC
+     📬 netdev
+     https://lore.kernel.org/all/4af79c95e316b9a65a4c6302fc912a5944198b6b.1781031726.git.zzhan461@ucr.edu
+
+  🔄 [PATCH 5.10] io_uring: prevent opcode speculation
+     by Alexey Panov — 2026-06-10 20:22 UTC
+     📬 io-uring
+     https://lore.kernel.org/all/20260610172203.27999-1-apanov@astralinux.ru
+
+  🔄 [PATCH v3 0/9] vfio/pci: Add mmap() for DMABUFs
+     by Matt Evans — 2026-06-10 16:43 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260610154327.37758-1-matt@ozlabs.org
+
+  🔄 [PATCH net-next] netconsole: clear cached dev_name on
+ resume-window cleanup
+     by Breno Leitao — 2026-06-10 07:26 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610-netconsole_fix_more-v1-1-a18652c47cef@debian.org
+
+  🔄 [PATCH 2/2] preserve the next empty-entry hint after allocation
+     by Yang Wen — 2026-06-10 21:55 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260610135511.203041-1-anmuxixixi@gmail.com
+
+  🔄 [PATCH 0/2] ASoC: img: Use guard() for spin locks
+     by phucduc.bui@gmail.com — 2026-06-10 17:45 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260610104524.87166-1-phucduc.bui@gmail.com
+
+  🔄 [net-next 0/9] ravb: Add gPTP support for Gen4
+     by =?UTF-8?q?Niklas=20S=C3=B6derlund?= — 2026-06-10 12:24 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610102432.3538432-1-niklas.soderlund+renesas@ragnatech.se
+
+  🔄 [PATCH] ASoC: meson: axg-tdm-formatter: Use guard() for mutex locks
+     by phucduc.bui@gmail.com — 2026-06-10 17:21 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260610102153.83367-1-phucduc.bui@gmail.com
+     (2 roots)
+
+  🔄 [PATCH 00/10] ASoC: mediatek: Use guard() for mutex & spin locks
+     by phucduc.bui@gmail.com — 2026-06-10 17:20 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260610102021.83273-1-phucduc.bui@gmail.com
+
+  🔄 [PATCH net] net: bcmgenet: Use weighted round-robin TX DMA arbitration
+     by Ovidiu Panait — 2026-06-10 08:52 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610085238.56300-1-ovidiu.panait.rb@renesas.com
+
+  🔄 [PATCH v2] ASoC: SOF: topology: fix memory leak in snd_sof_load_topology
+     by Zhao Dongdong — 2026-06-10 15:20 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/tencent_3EED6D778DC52C3703A2D1EE8119372E8E08@qq.com
+
+  🔄 [PATCH net-next v09 0/5] net: hinic3: PF initialization
+     by Fan Gong — 2026-06-10 14:59 UTC
+     📬 netdev
+     https://lore.kernel.org/all/cover.1781062575.git.wudi234@huawei.com
+
+  🔄 [PATCH net-next v6 0/5] net: wangxun: timeout and error
+     by Jiawen Wu — 2026-06-10 14:09 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610060917.23980-1-jiawenwu@trustnetic.com
+
+  🔄 [PATCH V4 net-next 0/6] net: hns3: enhance tc flow offload support
+     by Jijie Shao — 2026-06-10 14:06 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610060618.834987-1-shaojijie@huawei.com
+
+  🔄 [PATCH] ASoC: sdw_utils: fix missing component_name for cs42l43 part_id 0x2A3B
+     by Chia-Lin Kao (AceLan) — 2026-06-10 12:17 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260610041753.1151088-1-acelan.kao@canonical.com
+
+  🔄 [PATCH v3 net-next] bonding: no longer rely on RTNL in bond_fill_info()
+     by Eric Dumazet — 2026-06-10 03:19 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610031946.466417-1-edumazet@google.com
+
+  🔄 [PATCH v2 net] octeontx2-af: npc: Fix size of entry2cntr_map
+     by Ratheesh Kannoth — 2026-06-10 07:53 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610022344.969774-1-rkannoth@marvell.com
+
+  🔄 [PATCH net-next v8 0/6] net: stmmac: eic7700: add eth1 variant support and update delay bindings
+     by lizhi2@eswincomputing.com — 2026-06-10 09:27 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610012727.848-1-lizhi2@eswincomputing.com
+     (2 roots)
+
+  🔄 [PATCH net-next] tcp: tighten the FIN exception in tcp_sequence()
+     by Simon Baatz via B4 Relay — 2026-06-10 00:09 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260610-tcp_fin_more_restrictive-v1-1-eefc30d7ddd8@gmail.com
+     (2 roots)
+
+  🔄 [PATCH 1/3 net-next v6] ipv4: centralize devconf sysctl handling
+     by Fernando Fernandez Mancera — 2026-06-09 22:45 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609204520.4670-1-fmancera@suse.de
+
+  🔄 Please apply 98d0912e9f84 ("net: skbuff: fix missing zerocopy
+ reference in pskb_carve helpers") to 6.1.y
+     by Salvatore Bonaccorso — 2026-06-09 21:16 UTC
+     📬 stable
+     https://lore.kernel.org/all/aihmk7GjOP0e0miV@eldamar.lan
+
+  🔄 [PATCH] net: ethernet: sis900: correct CONFIG_VLAN_8021Q macro name in comment
+     by Ethan Nelson-Moore — 2026-06-09 10:56 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609175656.20574-1-enelsonmoore@gmail.com
+
+  🔄 [PATCH net 0/3][pull request] Intel Wired LAN Driver Updates 2026-06-09 (idpf, ixgbe, igc)
+     by Tony Nguyen — 2026-06-09 10:24 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609172458.4046222-1-anthony.l.nguyen@intel.com
+
+  🔄 [PATCH] net: hsr: simplify fill_last_seq_nrs()
+     by Yury Norov — 2026-06-09 13:15 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609171545.1051322-1-ynorov@nvidia.com
+
+  🔄 [PATCH net-next v8 00/10] enic: SR-IOV V2 admin channel and MBOX
+ protocol
+     by Satish Kharat — 2026-06-09 09:32 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609-enic-sriov-v2-admin-channel-v2-v8-0-8ad8babbb826@cisco.com
+
+  🔄 [PATCH v2] atm: fix use-after-free in sigd_put_skb()
+     by Weiming Shi — 2026-06-10 00:21 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609162107.2865310-2-bestswngs@gmail.com
+
+  🔄 [PATCH net-next v10 0/3] ksz87xx: add support for low-loss cable
+ equalizer errata
+     by Fidelio Lawson — 2026-06-09 18:19 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609-ksz87xx_errata_low_loss_connections-v10-0-9ba4418cf3db@exotec.com
+
+  🔄 [PATCH net-next v4 00/13] net: Add ADIN1140 support
+     by Ciprian Regus via B4 Relay — 2026-06-09 18:27 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609-adin1140-driver-v4-0-0753e28ee004@analog.com
+     (2 roots)
+
+  🔄 [PATCH 0/4] ASoC: Validate written enum values in custom controls
+     by HyeongJun An — 2026-06-09 21:43 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260609124317.38046-1-sammiee5311@gmail.com
+
+  🔄 [PATCH v3] net: stmmac: xgmac2: disable RBUE in default RX interrupt mask
+     by muhammad.nazim.amirul.nazle.asmade@altera.com — 2026-06-09 05:17 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609121703.9736-1-muhammad.nazim.amirul.nazle.asmade@altera.com
+
+  🔄 [PATCH net-next v7 0/2] net: dsa: mv88e6xxx: add support for
+ credit based shaper
+     by Cedric Jehasse via B4 Relay — 2026-06-09 14:10 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609-net-next-mv88e6xxx-cbs-v7-0-7d5d732df545@luminex.be
+     (2 roots)
+
+  🔄 [PATCH v6 00/11] ASoC: renesas: fsi: Fix system hang by adding SPU clock
+     by phucduc.bui@gmail.com — 2026-06-09 18:38 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260609113836.45079-1-phucduc.bui@gmail.com
+
+  🔄 [PATCH net 1/1] net: atm: reject out-of-range traffic classes in QoS validation
+     by Ren Wei — 2026-06-09 16:34 UTC
+     📬 netdev
+     https://lore.kernel.org/all/58f02c6f73d9818fd5d2022e1116759fdde6116b.1780965530.git.zcliangcn@gmail.com
+
+  🔄 [PATCH net-next v2 0/2] ipv6: mcast: annotate data races in /proc/net/igmp6
+     by Yuyang Huang — 2026-06-09 17:11 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609081113.7613-1-sigefriedhyy@gmail.com
+
+  🔄 [PATCH] net: dsa: sja1105: fix refcount leak in sja1105_setup_tc_taprio()
+     by Wentao Liang — 2026-06-09 07:40 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609074002.204113-1-vulab@iscas.ac.cn
+
+  🔄 [PATCH net v2 1/2] geneve: gate GRO hint in geneve_gro_complete() on gs->gro_hint
+     by Xiang Mei — 2026-06-08 21:13 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609041334.2506153-1-xmei5@asu.edu
+
+  🔄 [PATCH v2] flow_dissector: fix uninit-value in __skb_flow_dissect() for ETH_ADDRS
+     by Yun Zhou — 2026-06-09 10:37 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260609023752.1245848-1-yun.zhou@windriver.com
+     (2 roots)
+
+  🔄 [PATCH v3 0/9] ASoC: don't use array if single pattern
+     by Kuninori Morimoto — 2026-06-09 00:22 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/87v7bs36m0.wl-kuninori.morimoto.gx@renesas.com
+
+  🔄 [PATCH v16 net-next 00/10] psp: Add support for dev-assoc/disassoc
+     by Wei Wang — 2026-06-08 16:31 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608233118.2694144-1-weibunny.kernel@gmail.com
+
+  🔄 [PATCH net-next v3 0/6] pds_core: Add PLDM firmware update and host backed memory support
+     by Nikhil P. Rao — 2026-06-08 22:32 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608223256.12357-1-nikhil.rao@amd.com
+
+  🔄 [PATCH v2 0/6] Remove __folio_index again
+     by Matthew Wilcox (Oracle) — 2026-06-08 22:06 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260608210618.3437216-1-willy@infradead.org
+
+  🔄 [PATCH net-next v2] octeontx2-af: Fix PCI device reference leaks in debugfs
+     by Yuho Choi — 2026-06-08 12:55 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608165546.61347-1-dbgh9129@gmail.com
+
+  🔄 [PATCH] net: pch_gbe: handle TX skb allocation failure
+     by Ruoyu Wang — 2026-06-09 00:30 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608163005.6-1-ruoyuw560@gmail.com
+
+  🔄 [PATCH net-next v2 00/10] net: dsa: microchip: remove unnecessary
+ dsa_switch_ops callbacks
+     by Bastien Curutchet (Schneider Electric) — 2026-06-08 16:10 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608-clean-ksz-3rd-v2-0-6e61b7be23c4@bootlin.com
+
+  🔄 [PATCH 0/3] ASoC: use scoped OF node handling in manual cleanup
+ paths
+     by =?utf-8?q?C=C3=A1ssio_Gabriel?= — 2026-06-08 10:39 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260608-asoc-of-node-scoped-cleanup-v1-0-9e3ac518dc2e@gmail.com
+
+  🔄 [PATCH net-next v4 0/3] net: libwx: improve VF ethtool support
+     by Mengyuan Lou — 2026-06-08 18:39 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608103946.25786-1-mengyuanlou@net-swift.com
+
+  🔄 [PATCH v3 00/10] Expand SoundWire enumeration helper coverage
+     by Charles Keepax — 2026-06-08 11:27 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260608102714.2503120-1-ckeepax@opensource.cirrus.com
+
+  🔄 [PATCH net v2 0/2] net: mana: fix error-path issues in queue setup
+     by Aditya Garg — 2026-06-08 03:13 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608101345.2267320-1-gargaditya@linux.microsoft.com
+
+  🔄 [PATCH net-next v3 0/2] net: lan743x: add RMII support for PCI11x1x
+     by Thangaraj Samynathan — 2026-06-08 15:34 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260608100435.11214-1-thangaraj.s@microchip.com
+
+  🔄 [PATCH 0/6] ASoC: mediatek: tidyup details
+     by Kuninori Morimoto — 2026-06-08 01:24 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/87ik7tesdw.wl-kuninori.morimoto.gx@renesas.com
+
+  🔄 [PATCH v3] drm/xe: Add compact-PT and addr mask handling for page reclaim
+     by Brian Nguyen — 2026-06-05 22:42 UTC
+     📬 stable
+     https://lore.kernel.org/all/20260605224257.2194194-2-brian3.nguyen@intel.com
+
+  🔄 [PATCH] ALSA: hda/realtek: Enable micmute LED on HP EliteBook 6 G1a
+     by Denis Batishchev — 2026-06-04 15:15 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260604131518.45993-1-ii343hbka@gmail.com
+
+  🔄 [PATCH] ASoC: adau1372: Clear PLL_EN on failed PLL lock without reset GPIO
+     by Guangshuo Li — 2026-06-04 20:55 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260604125520.1428905-1-lgs201920130244@gmail.com
+
+  🔄 [PATCH v2 0/3] ASoC: rockchip: Use guard() for spin locks
+     by phucduc.bui@gmail.com — 2026-06-04 10:35 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260604033554.96996-1-phucduc.bui@gmail.com
+     (2 roots)
+
+  🔄 [PATCH] ASoC: topology: Check PCM and DAI name strings before use
+     by =?utf-8?q?C=C3=A1ssio_Gabriel?= — 2026-06-04 00:10 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260604-asoc-topology-check-pcm-dai-names-v1-1-e1b0f6f7c2ce@gmail.com
+
+  🔄 [PATCH] ASoC: ti: davinci-mcasp: Add audio-graph-card2 and DPCM support
+     by Sen Wang — 2026-06-03 16:18 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260603211835.635184-1-sen@ti.com
+
+  🔄 [PATCH v2 0/5] ASoC: rockchip: Reorder clock enable sequence
+     by phucduc.bui@gmail.com — 2026-06-02 17:16 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/20260602101608.45137-1-phucduc.bui@gmail.com
+     (2 roots)
+
+  🔄 [BUG] OV02C10 on Dell 16 Premium DA16250 (ARL): INT3472
+ handshake-derived "dvdd" regulator registered but never linked to sensor,
+ sensor probe fails with -EREMOTEIO
+     by Angioli Samuele (gmail) — 2026-06-01 16:06 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/abeb9142-16a7-417b-be0f-b929234de6db@gmail.com
+
+  🔄 [PATCH v5 0/7] fuse: {io-uring} Allow to reduce the number of
+ queues and request distribution
+     by Bernd Schubert via B4 Relay — 2026-05-29 00:55 UTC
+     📬 fuse-devel
+     https://lore.kernel.org/all/20260529-reduced-nr-ring-queues_3-v5-0-1dc08c2fccf6@bsbernd.com
+     (2 roots)
+
+  🔄 [PATCH] hfs: reject volume bitmaps overlapping the MDB
+     by Yue Sun — 2026-05-27 23:32 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260527153206.85701-1-samsun1006219@gmail.com
+
+  🔄 [PATCH v3 00/10] fuse: add io-uring buffer pools and zero-copy
+     by Joanne Koong — 2026-05-22 13:58 UTC
+     📬 fuse-devel
+     https://lore.kernel.org/all/20260522205823.1597313-1-joannelkoong@gmail.com
+
+  🔄 [RFC] connectat()/bindat() or an alternative design
+     by John Ericson — 2026-05-18 15:09 UTC
+     📬 netdev
+     https://lore.kernel.org/all/b1af80fc-a57c-408d-bdfe-fa6bae26eaca@app.fastmail.com
+
+  🔄 [PATCH BlueZ v5 00/16] Functional/integration testing
+     by Pauli Virtanen — 2026-05-13 19:17 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/cover.1778688966.git.pav@iki.fi
+
+  🔄 [PATCH 1/3] apparmor: Fix return in ns_mkdir_op
+     by Hongling Zeng — 2026-05-03 12:12 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260503041243.200895-1-zenghongling@kylinos.cn
+
+  🔄 [PATCH] apparmor/lsm: Fix aa_dfa_unpack's error handling in aa_setup_dfa_engine
+     by GONG Ruiqi — 2026-04-23 11:10 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260423031056.563527-1-gongruiqi1@huawei.com
+
+  🔄 [PATCH v12 00/86] Generic line based metadata support, internal pads
+     by Sakari Ailus — 2026-04-09 23:13 UTC
+     📬 linux-media
+     https://lore.kernel.org/all/20260409201501.975242-1-sakari.ailus@linux.intel.com
+
+  🔄 [PATCH RESEND] apparmor: Fix string overrun due to missing termination
+     by Daniel J Blueman — 2026-03-27 19:58 UTC
+     📬 linux-security-module
+     https://lore.kernel.org/all/20260327115833.7572-1-daniel@quora.org
+
+  🔄 [RFC net-next 00/15] Introducing ipxlat: a stateless IPv4/IPv6 translation device
+     by Ralf Lici — 2026-03-19 16:12 UTC
+     📬 netdev
+     https://lore.kernel.org/all/20260319151230.655687-1-ralf@mandelbit.com
+
+  🔄 [RFC PATCH 00/15] kmem_cache instances with static storage duration
+     by Al Viro — 2026-01-10 04:02 UTC
+     📬 linux-fsdevel
+     https://lore.kernel.org/all/20260110040217.1927971-1-viro@zeniv.linux.org.uk
+
+  🔄 [PATCH net 0/5] rxrpc: Miscellaneous fixes
+     by David Howells — 2022-05-21 09:02 UTC
+     📬 netdev
+     https://lore.kernel.org/all/165312017819.246773.14440495192028707532.stgit@warthog.procyon.org.uk
+     (5 roots)
+
+  🔄 [bluez/bluez]
+     by BluezTestBot — 2022-03-29 16:52 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bluez/bluez/push/refs/tags/5.64/000000-e74df8@github.com
+     (713 roots)
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 [Bug 73081] Fail to setup Bluetooth on Dell Venue 11 Pro
+     by bugzilla-daemon@bugzilla.kernel.org — 2015-08-03 20:06 UTC
+     📬 linux-bluetooth
+     https://lore.kernel.org/all/bug-73081-62941-uxaG34jEzk@https.bugzilla.kernel.org/
+
+  🔄 PC Speaker
+     by Jon Masters — 2000-03-25 01:14 UTC
+     📬 linux-sound
+     https://lore.kernel.org/all/marc-linux-sound-95395248102237@msgid-missing
+     (17 roots)
+

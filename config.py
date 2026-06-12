@@ -39,46 +39,54 @@ SCHEDULE_TIME = datetime.time(hour=0, tzinfo=zoneinfo.ZoneInfo("Asia/Jerusalem")
 LOOPBACK_HOURS = 24
 
 # -----------------------------------------------------------
-# Blacklist
-# Entries whose title matches any rule below are skipped
-# entirely — their thread will not be fetched.
-#
-# BLACKLIST_TAGS     – exact match (case-insensitive) against bracket tags
-#                      e.g. "RFC" blocks [RFC] but not [RFC PATCH]
-# BLACKLIST_SUBJECTS – exact match (case-insensitive) against each colon-
-#                      delimited subject prefix
-#                      e.g. "staging" blocks "staging: ..." but not "drm/staging: ..."
-# BLACKLIST_TITLE    – substring match (case-insensitive) against the rest
-#                      of the title after tags and subjects are stripped
+# Mailing list display names
+# Maps List-Id address (e.g. "linux-kernel@vger.kernel.org")
+# to a short human-readable name shown in the digest.
+# If an address is not listed here, the display name from the
+# List-Id header is used, falling back to the raw address.
 # -----------------------------------------------------------
-BLACKLIST_TAGS: list[str] = [
-    "git pull",
-    "bluez/bluez",
-    "Buildroot",
-    # "RFC",
-]
- 
-BLACKLIST_SUBJECTS: list[str] = [
-    "RTT-PROBE",
-    "qcom",
-    "dts",
-    "KVM",
-    "riscv",
-    "e1000",
-    "dt-bindings",
-    "Documentation",
+MAILING_LIST_NAMES: dict[str, str] = {
+    "dev.dpdk.org": "dpdk"
+}
 
+# -----------------------------------------------------------
+# Filters (blocklist)
+# Threads matching ANY of these are silently dropped.
+# -----------------------------------------------------------
+
+# Authors to block — case-insensitive substring match against the
+# display name / email in the From header.
+# Examples: ["noreply@kernel.org", "Some Bot"]
+BLOCKED_AUTHORS: list[str] = [
+    "kernel test robot"
 ]
- 
-BLACKLIST_TITLE: list[str] = [
-    # "typo",
-    # "Revert",
+
+# Mailing lists to fetch
+MAILLING_LISTS: list[str] = [
+    "linux-media",
+    "lkml",
+    "stable",
+    "netdev",
+    "io-uring",
+    "linux-input",
+    "linux-fsdevel",
+    "linux-sound",
+    "linux-bluetooth",
+    "linux-security-module",
+    "linux-hardening",
+    "linux-mm",
+    "linux-modules",
+    "netfilter-devel",
+    "linux-sctp",
+    "rcu",
+    "fuse-devel",
+    "linux-api",
+    "kernel-hardening",
 ]
 
 # -----------------------------------------------------------
 # Rate limiting / politeness
 # -----------------------------------------------------------
-REQUEST_DELAY_SECONDS = 0.1     # Pause between HTTP requests
 REQUEST_TIMEOUT       = 15      # HTTP timeout per feed
 
 # -----------------------------------------------------------

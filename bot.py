@@ -73,6 +73,9 @@ def _format_thread(thread: scraper.Thread) -> str:
         f"👤 {_h(thread.author)}  🕐 {_h(date_str)}",
     ]
 
+    if thread.mailing_list:
+        lines.append(f"📬 {_h(thread.mailing_list)}")
+
     new_count = sum(_count_new_entries(r, cutoff) for r in thread.roots)
     if new_count:
         reply_str = "entry" if new_count == 1 else "entries"
@@ -117,8 +120,6 @@ def _build_batches(threads: list[scraper.Thread]) -> Generator[str, None, None]:
                 msg += THREAD_SEPARATOR
             msg += current
             need_sep = True
-
-    yield msg
 
     yield msg
 
