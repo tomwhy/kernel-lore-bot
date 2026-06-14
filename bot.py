@@ -19,7 +19,6 @@ from telegram import Update, Bot, BotCommandScopeChat
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Application
 from telegram.error import Forbidden, TelegramError
-from typing import Generator
 
 import config
 import scraper
@@ -31,11 +30,8 @@ log = logging.getLogger(__name__)
 #  Constants                                                           #
 # ------------------------------------------------------------------ #
 
-TELEGRAM_MAX_CHARS = 4096
 
 STATUS_BADGE = {"new": "🆕", "updated": "🔄"}
-
-THREAD_SEPARATOR = "\n\n" + "─" * 19 + "\n\n"
 
 
 # ------------------------------------------------------------------ #
@@ -89,39 +85,9 @@ def _format_thread(thread: scraper.Thread) -> str:
 def _format_header(total: int) -> str:
     now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     return (
-        f"🐧 <b>Kernel Lore Daily Digest</b>\n"
-        f"<i>{now}</i> — <b>{total}</b> new thread(s)\n\n"
+        f"🐧 <b>Kernel Lore Digest</b>\n"
+        f"<i>{now}</i> — <b>{total}</b> new thread(s)"
     )
-
-
-# ------------------------------------------------------------------ #
-#  Batching                                                            #
-# ------------------------------------------------------------------ #
-
-def _build_batches(threads: list[scraper.Thread]) -> Generator[str, None, None]:
-    """
-    Pack threads into as few messages as possible, splitting only on
-    thread boundaries so no thread is ever truncated.
-    Each batch is guaranteed to be ≤ TELEGRAM_MAX_CHARS characters.
-    """
-    msg      = _format_header(len(threads))
-    need_sep = False
-
-    for thread in threads:
-        current = _format_thread(thread)
-        needed  = len(current) + (len(THREAD_SEPARATOR) if need_sep else 0)
-
-        if len(msg) + needed > TELEGRAM_MAX_CHARS:
-            yield msg
-            msg      = current
-            need_sep = True
-        else:
-            if need_sep:
-                msg += THREAD_SEPARATOR
-            msg += current
-            need_sep = True
-
-    yield msg
 
 
 # ------------------------------------------------------------------ #
@@ -165,16 +131,27 @@ async def broadcast_new_threads(context: ContextTypes.DEFAULT_TYPE) -> None:
     all_blocked: set[int] = set()
     total_sent = 0
 
-    for i, msg in enumerate(_build_batches(threads), start=1):
+    # Send header
+    header = _format_header(len(threads))
+    for chat_id in chat_ids:
+        ok = await send_to(context.bot, chat_id, header)
+        if not ok:
+            all_blocked.add(chat_id)
+
+    # Send one message per thread
+    for i, thread in enumerate(threads, start=1):
+        msg = _format_thread(thread)
         for chat_id in chat_ids:
+            if chat_id in all_blocked:
+                continue
             ok = await send_to(context.bot, chat_id, msg)
             if ok:
                 total_sent += 1
             else:
                 all_blocked.add(chat_id)
 
-        log.debug("Batch #%d done", i)
-        time.sleep(0.1)
+        log.debug("Thread #%d/%d done", i, len(threads))
+        time.sleep(0.01)
 
     if all_blocked:
         subscribers.remove_many(all_blocked)
@@ -305,7 +282,11 @@ def run_bot() -> None:
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("scrape", scrape))
 
-    app.job_queue.run_daily(broadcast_new_threads, config.SCHEDULE_TIME)
+    app.job_queue.run_repeating(
+        broadcast_new_threads,
+        interval=datetime.timedelta(hours=config.SCHEDULE_INTERVAL_HOURS),
+        first=0,
+    )
 
     log.info("Bot is running. Send /start to the bot on Telegram to subscribe.")
     app.run_polling(drop_pending_updates=True)

@@ -49,7 +49,7 @@ class Entry:
     url: str            # https://lore.kernel.org/all/<msgid>/
     author: str
     updated: datetime
-    mailing_list: str
+    mailing_list: Optional[str]
     reply: Optional[Reply]          # None ↔ this is a thread root
 
     @property
@@ -107,7 +107,7 @@ class Thread:
         return self.roots[0].entry.id
     
     @property
-    def mailing_list(self) -> str:
+    def mailing_list(self) -> Optional[str]:
         return self.roots[0].entry.mailing_list
 
 
@@ -131,13 +131,14 @@ _MBOX_SEP_RE = re.compile(r"^From ", re.MULTILINE)
 _LIST_ID_RE = re.compile(r"<([^>]+)>")
 
 
-def _parse_list_id(header_value: str) -> str:
+def _parse_list_id(header_value: str) -> Optional[str]:
     m = _LIST_ID_RE.search(header_value)
-    spec = m.group(1) if m else header_value
+    if m is None:
+        return None
+
+    spec = m.group(1)
     if spec in config.MAILING_LIST_NAMES:
         return config.MAILING_LIST_NAMES[spec]
-    if "@" in spec:
-        return spec.split("@")[0]
     return spec.split(".")[0]
 
 
@@ -167,8 +168,7 @@ def _parse_mbox_message(msg: Message) -> Optional[Entry]:
             updated = datetime.now(timezone.utc)
 
         list_id = msg["List-Id"] or ""
-        address = _parse_list_id(list_id)
-        mailing_list = config.MAILING_LIST_NAMES.get(address)
+        mailing_list = _parse_list_id(list_id)
 
         in_reply_to = (msg["In-Reply-To"] or "").strip().strip("<>")
         reply = Reply(ref=in_reply_to) if in_reply_to else None
@@ -182,7 +182,7 @@ def _parse_mbox_message(msg: Message) -> Optional[Entry]:
             author=author,
             updated=updated,
             reply=reply,
-            mailing_list=mailing_list or address,
+            mailing_list=mailing_list,
         )
     except Exception as exc:
         log.debug("Skipping malformed mbox message: %s", exc)

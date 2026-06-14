@@ -6,7 +6,6 @@
 import os
 import pathlib
 import datetime
-import zoneinfo
 
 # -----------------------------------------------------------
 # Telegram
@@ -31,19 +30,19 @@ ADMIN_CHAT_ID: int = int(os.environ.get("ADMIN_CHAT_ID", "0"))
 # -----------------------------------------------------------
 # Scraping schedule
 # -----------------------------------------------------------
-# Run every day at 00:00 IST
-SCHEDULE_TIME = datetime.time(hour=0, tzinfo=zoneinfo.ZoneInfo("Asia/Jerusalem"))
 
 # How many hours back to look for "new" posts on first run
 # (prevents a flood of old messages on initial startup)
-LOOPBACK_HOURS = 24
+LOOPBACK_HOURS = 4
+
+# How often to run the scrape, in hours. Supports fractions (e.g. 0.5 = every 30 min).
+SCHEDULE_INTERVAL_HOURS: float = float(os.environ.get("SCHEDULE_INTERVAL_HOURS", LOOPBACK_HOURS))
 
 # -----------------------------------------------------------
 # Mailing list display names
-# Maps List-Id address (e.g. "linux-kernel@vger.kernel.org")
-# to a short human-readable name shown in the digest.
-# If an address is not listed here, the display name from the
-# List-Id header is used, falling back to the raw address.
+# Maps List-Id address to a short human-readable name shown in the digest.
+# Threads whose List-Id is not present here will have mailing_list=None
+# and will pass the whitelist filter (shown without a list label).
 # -----------------------------------------------------------
 MAILING_LIST_NAMES: dict[str, str] = {
     "dev.dpdk.org": "dpdk"
@@ -56,7 +55,6 @@ MAILING_LIST_NAMES: dict[str, str] = {
 
 # Authors to block — case-insensitive substring match against the
 # display name / email in the From header.
-# Examples: ["noreply@kernel.org", "Some Bot"]
 BLOCKED_AUTHORS: list[str] = [
     "kernel test robot"
 ]
