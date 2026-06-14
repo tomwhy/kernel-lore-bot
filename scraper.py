@@ -27,8 +27,7 @@ log = logging.getLogger(__name__)
 
 ATOM_NS = "http://www.w3.org/2005/Atom"
 THREAD_NS = "http://purl.org/syndication/thread/1.0"
-KERNEL_LORE_URL = "https://lore.kernel.org/all/new.atom"
-LORE_BASE_URL   = "https://lore.kernel.org/all"
+LORE_BASE_URL = "https://lore.kernel.org"
 
 
 # ------------------------------------------------------------------ #
@@ -49,7 +48,6 @@ class Entry:
     url: str            # https://lore.kernel.org/all/<msgid>/
     author: str
     updated: datetime
-    mailing_list: Optional[str]
     reply: Optional[Reply]          # None ↔ this is a thread root
 
     @property
@@ -79,11 +77,13 @@ class Thread:
                      that resolves to another message in the thread).
                      Normally exactly one; >1 signals a split or malformed
                      thread.
+    `mailing_list` – the list slug this thread was fetched from (e.g. "netdev").
     `status`       – 'new' | 'updated'
 
     Convenience properties delegate to roots[0] for sorting/header use.
     """
     roots: list[Node]
+    mailing_list: str = ""
     status: str = ""
 
     @property
@@ -105,14 +105,10 @@ class Thread:
     @property
     def id(self) -> str:
         return self.roots[0].entry.id
-    
-    @property
-    def mailing_list(self) -> Optional[str]:
-        return self.roots[0].entry.mailing_list
 
 
 # ------------------------------------------------------------------ #
-#  XML helpers (used for new.atom pagination only)                     #
+#  XML helpers                                                         #
 # ------------------------------------------------------------------ #
 
 def _tag(ns: str, name: str) -> str:
@@ -125,21 +121,6 @@ def _tag(ns: str, name: str) -> str:
 # Matches the "From <sender> <date>" separator line that opens each
 # message in an mbox file.
 _MBOX_SEP_RE = re.compile(r"^From ", re.MULTILINE)
-
-# Matches a List-Id header value per RFC 2919:
-#   optional-display-name <local-part.domain>
-_LIST_ID_RE = re.compile(r"<([^>]+)>")
-
-
-def _parse_list_id(header_value: str) -> Optional[str]:
-    m = _LIST_ID_RE.search(header_value)
-    if m is None:
-        return None
-
-    spec = m.group(1)
-    if spec in config.MAILING_LIST_NAMES:
-        return config.MAILING_LIST_NAMES[spec]
-    return spec.split(".")[0]
 
 
 def _parse_mbox_message(msg: Message) -> Optional[Entry]:
@@ -167,13 +148,10 @@ def _parse_mbox_message(msg: Message) -> Optional[Entry]:
         except Exception:
             updated = datetime.now(timezone.utc)
 
-        list_id = msg["List-Id"] or ""
-        mailing_list = _parse_list_id(list_id)
-
         in_reply_to = (msg["In-Reply-To"] or "").strip().strip("<>")
         reply = Reply(ref=in_reply_to) if in_reply_to else None
 
-        url = f"{LORE_BASE_URL}/{msgid}"
+        url = f"{LORE_BASE_URL}/all/{msgid}"
 
         return Entry(
             id=msgid,
@@ -182,7 +160,6 @@ def _parse_mbox_message(msg: Message) -> Optional[Entry]:
             author=author,
             updated=updated,
             reply=reply,
-            mailing_list=mailing_list,
         )
     except Exception as exc:
         log.debug("Skipping malformed mbox message: %s", exc)
@@ -243,7 +220,7 @@ def _fetch_mbox(url: str) -> Optional[str]:
     return None
 
 
-def iter_mbox_emails(mbox_text) -> Generator[_email.Message, None, None]:
+def iter_mbox_emails(mbox_text: str) -> Generator[_email.Message, None, None]:
     seps = _MBOX_SEP_RE.finditer(mbox_text)
     start = next(seps).start()
     for next_sep in seps:
@@ -255,13 +232,13 @@ def iter_mbox_emails(mbox_text) -> Generator[_email.Message, None, None]:
 #  Thread mbox fetch + tree construction                               #
 # ------------------------------------------------------------------ #
 
-def _fetch_thread_tree(entry_id: str) -> Optional[Thread]:
-    mbox_url = f"https://lore.kernel.org/all/{entry_id}/t.mbox.gz"
+def _fetch_thread_tree(entry_id: str, mailing_list: str) -> Optional[Thread]:
+    mbox_url = f"{LORE_BASE_URL}/all/{entry_id}/t.mbox.gz"
     mbox_text = _fetch_mbox(mbox_url)
     if mbox_text is None:
         return None
 
-    entries: list[Entry] = list(filter(lambda entry: entry is not None, map(_parse_mbox_message, iter_mbox_emails(mbox_text))))
+    entries: list[Entry] = list(filter(None, map(_parse_mbox_message, iter_mbox_emails(mbox_text))))
     if not entries:
         log.debug("No valid messages parsed from mbox at %s", mbox_url)
         return None
@@ -289,20 +266,26 @@ def _fetch_thread_tree(entry_id: str) -> Optional[Thread]:
 
     return Thread(
         roots=[_build(e) for e in root_entries],
+        mailing_list=mailing_list,
     )
 
 
 # ------------------------------------------------------------------ #
-#  new.atom pagination                                                 #
+#  Per-list new.atom pagination                                        #
 # ------------------------------------------------------------------ #
 
-def _fetch_new_entries(after: datetime) -> Generator[str, None, None]:
+def _fetch_list_entries(list_name: str, after: datetime) -> Generator[str, None, None]:
+    """
+    Page through /<list_name>/new.atom and yield entry IDs (message-IDs)
+    for all entries updated after `after`.
+    """
+    feed_base = f"{LORE_BASE_URL}/{list_name}/new.atom"
     timestamp = datetime.now(timezone.utc)
 
     while True:
         try:
             resp = requests.get(
-                KERNEL_LORE_URL,
+                feed_base,
                 params={"t": timestamp.strftime("%Y%m%d%H%M%S")},
                 timeout=config.REQUEST_TIMEOUT,
                 headers={"User-Agent": "kernel-lore-bot/1.0"},
@@ -310,7 +293,7 @@ def _fetch_new_entries(after: datetime) -> Generator[str, None, None]:
             resp.raise_for_status()
             root = ET.fromstring(resp.content)
         except (requests.RequestException, ET.ParseError) as exc:
-            log.warning("Failed to fetch/parse new.atom at t=%s: %s", timestamp, exc)
+            log.warning("Failed to fetch/parse %s at t=%s: %s", feed_base, timestamp, exc)
             return
 
         entries_in_page = 0
@@ -319,10 +302,10 @@ def _fetch_new_entries(after: datetime) -> Generator[str, None, None]:
         for entry_el in root.findall(_tag(ATOM_NS, "entry")):
             updated_raw = (entry_el.findtext(_tag(ATOM_NS, "updated")) or "").strip()
             updated = datetime.fromisoformat(updated_raw)
-            
+
             link_el    = entry_el.find(_tag(ATOM_NS, "link"))
             thread_url = link_el.get("href", "") if link_el is not None else ""
-            entry_id = pathlib.Path(urllib.parse.urlparse(thread_url).path).name
+            entry_id   = pathlib.Path(urllib.parse.urlparse(thread_url).path).name
 
             entries_in_page += 1
             last_updated = updated
@@ -344,15 +327,13 @@ def _fetch_new_entries(after: datetime) -> Generator[str, None, None]:
 
 def _is_blocked(thread: Thread) -> bool:
     """Return True if the thread matches any configured blocklist rule."""
-    if thread.author.lower() in config.BLOCKED_AUTHORS:
-        log.debug("Blocked by author filter: %r (%s)", thread.title, thread.author)
-        return True
-
-    if thread.mailing_list not in config.MAILLING_LISTS:
-        log.debug("Blocked by list filter: %r (%s)", thread.title, thread.mailing_list)
-        return True
-
+    author_lower = thread.author.lower()
+    for blocked in config.BLOCKED_AUTHORS:
+        if blocked in author_lower:
+            log.debug("Blocked by author filter: %r (%s)", thread.title, thread.author)
+            return True
     return False
+
 
 # ------------------------------------------------------------------ #
 #  Public API                                                          #
@@ -365,33 +346,43 @@ def fetch_new_threads(cutoff: Optional[datetime] = None) -> list[Thread]:
     log.info("=== Kernel Lore scrape started (cutoff: %s) ===", cutoff.isoformat())
 
     fetched_trees: list[Thread] = []
+    # Tracks all message-IDs we've already incorporated into a Thread,
+    # so the same thread isn't fetched twice when it appears in multiple lists.
     seen: set[str] = set()
 
-    with tqdm.tqdm(
-        desc="Fetching threads",
-        unit=" entries",
-        dynamic_ncols=True,
-    ) as pbar:
-        for entry in _fetch_new_entries(after=cutoff):
-            pbar.update(1)
-            if entry in seen:
-                continue
-            
-            thread = _fetch_thread_tree(entry)
-            if thread is None:
-                seen.add(entry)
-                continue
+    lists = config.MAILLING_LISTS
+    with tqdm.tqdm(lists, desc="Lists", unit="list", dynamic_ncols=True) as list_bar:
+        for list_name in list_bar:
+            list_bar.set_postfix(list=list_name)
 
-            fetched_trees.append(thread)
-            pbar.set_postfix(threads=len(fetched_trees))
+            with tqdm.tqdm(
+                desc=f"  {list_name}",
+                unit=" entries",
+                dynamic_ncols=True,
+                leave=False,
+            ) as entry_bar:
+                for entry_id in _fetch_list_entries(list_name, after=cutoff):
+                    entry_bar.update(1)
 
-            stack: list[Node] = list(thread.roots)
-            while stack:
-                node = stack.pop()
-                seen.add(node.entry.id)
-                stack.extend(node.children)
+                    if entry_id in seen:
+                        continue
 
-    log.info("Fetched %d unique thread trees", len(fetched_trees))
+                    thread = _fetch_thread_tree(entry_id, mailing_list=list_name)
+                    if thread is None:
+                        seen.add(entry_id)
+                        continue
+
+                    fetched_trees.append(thread)
+                    entry_bar.set_postfix(threads=len(fetched_trees))
+
+                    # Mark every message in this thread as seen
+                    stack: list[Node] = list(thread.roots)
+                    while stack:
+                        node = stack.pop()
+                        seen.add(node.entry.id)
+                        stack.extend(node.children)
+
+    log.info("Fetched %d unique thread trees across %d list(s)", len(fetched_trees), len(lists))
 
     filtered = [t for t in fetched_trees if not _is_blocked(t)]
     if len(filtered) < len(fetched_trees):
@@ -400,11 +391,11 @@ def fetch_new_threads(cutoff: Optional[datetime] = None) -> list[Thread]:
             len(fetched_trees) - len(filtered),
             len(filtered),
         )
-        fetched_trees = filtered
+    fetched_trees = filtered
 
     for tree in fetched_trees:
         tree.status = (
-            "new" if tree.roots and tree.roots[0].entry.updated >= cutoff
+            "new" if tree.roots[0].entry.updated >= cutoff
             else "updated"
         )
 
