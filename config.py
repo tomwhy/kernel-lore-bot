@@ -63,7 +63,6 @@ BLOCKED_AUTHORS: list[str] = [
 MAILLING_LISTS: list[str] = [
     "linux-media",
     "lkml",
-    "stable",
     "netdev",
     "io-uring",
     "linux-input",
@@ -92,3 +91,4 @@ REQUEST_TIMEOUT       = 15      # HTTP timeout per feed
 # -----------------------------------------------------------
 STATE_DIR        = pathlib.Path(os.environ.get("KERNEL_BOT_STATE_DIR", "data"))
 SUBSCRIBERS_FILE = STATE_DIR / "subscribers.json"
+FOLLOWS_FILE     = STATE_DIR / "follows.json"

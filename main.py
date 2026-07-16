@@ -38,18 +38,40 @@ def _dry_run() -> None:
         print("[DRY RUN] No new threads found.")
         return
 
-    print(f"\n[DRY RUN] {len(threads)} thread(s) would be sent to "
-          f"{subscribers.count()} subscriber(s):\n")
+    new_threads     = [t for t in threads if t.status == "new"]
+    updated_threads = [t for t in threads if t.status == "updated"]
 
-    for t in threads:
-        badge = "🆕" if t.status == "new" else "🔄"
-        print(f"  {badge} {t.title}")
+    sub_count = subscribers.count()
+
+    print(
+        f"\n[DRY RUN] {len(new_threads)} new thread(s) would be sent to "
+        f"{sub_count} subscriber(s):\n"
+    )
+    for t in new_threads:
+        print(f"  🆕 {t.title}")
         print(f"     by {t.author} — {t.updated.strftime('%Y-%m-%d %H:%M UTC')}")
         print(f"     📬 {t.mailing_list}")
         print(f"     {t.url}")
         if len(t.roots) > 1:
             print(f"     ({len(t.roots)} roots)")
         print()
+
+    if updated_threads:
+        print(
+            f"[DRY RUN] {len(updated_threads)} updated thread(s) — "
+            f"would notify followers only:\n"
+        )
+        for t in updated_threads:
+            import follows as _follows
+            follower_count = len(_follows.get_followers(t.id))
+            print(f"  🔄 {t.title}")
+            print(f"     by {t.author} — {t.updated.strftime('%Y-%m-%d %H:%M UTC')}")
+            print(f"     📬 {t.mailing_list}")
+            print(f"     {t.url}")
+            print(f"     👥 {follower_count} follower(s)")
+            if len(t.roots) > 1:
+                print(f"     ({len(t.roots)} roots)")
+            print()
 
 
 # ------------------------------------------------------------------ #

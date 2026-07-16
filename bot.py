@@ -8,21 +8,35 @@ Commands available to all users:
 
 Admin-only commands (ADMIN_CHAT_ID in config.py):
   /scrape  – trigger an immediate scrape and broadcast right now
+
+Inline buttons:
+  Each thread message has a 🔔 Follow / 🔕 Unfollow toggle.
+  Followers of a thread receive a notification when it is updated
+  in a subsequent scrape.
 """
+
+from __future__ import annotations
 
 import datetime
 import html
 import logging
 import time
 
-from telegram import Update, Bot, BotCommandScopeChat
+from telegram import Update, Bot, BotCommandScopeChat, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Application
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    CallbackQueryHandler,
+    Application,
+)
 from telegram.error import Forbidden, TelegramError
 
 import config
 import scraper
 import subscribers
+import follows
 
 log = logging.getLogger(__name__)
 
@@ -30,8 +44,11 @@ log = logging.getLogger(__name__)
 #  Constants                                                           #
 # ------------------------------------------------------------------ #
 
-
 STATUS_BADGE = {"new": "🆕", "updated": "🔄"}
+
+# CallbackQuery data prefixes
+_CB_FOLLOW   = "follow:"
+_CB_UNFOLLOW = "unfollow:"
 
 
 # ------------------------------------------------------------------ #
@@ -44,11 +61,13 @@ def _h(text: str) -> str:
 
 
 def _cutoff() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=config.LOOPBACK_HOURS)
+    return datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        hours=config.LOOPBACK_HOURS
+    )
 
 
 def _count_new_entries(node: scraper.Node, cutoff: datetime.datetime) -> int:
-    """Count all entries in a node's subtree (including the node itself) that are within the cutoff."""
+    """Count all entries in a node's subtree that are within the cutoff."""
     count = 0
     stack = [node]
     while stack:
@@ -82,6 +101,20 @@ def _format_thread(thread: scraper.Thread) -> str:
     return "\n".join(lines)
 
 
+def _format_update_notification(thread: scraper.Thread) -> str:
+    """Format an update notification for followers of a thread."""
+    date_str = thread.updated.strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        f"🔔 <b>Thread update</b>",
+        f"<b>{_h(thread.title)}</b>",
+        f"👤 {_h(thread.author)}  🕐 {_h(date_str)}",
+    ]
+    if thread.mailing_list:
+        lines.append(f"📬 {_h(thread.mailing_list)}")
+    lines.append(f'<a href="{thread.url}">🔗 View thread</a>')
+    return "\n".join(lines)
+
+
 def _format_header(total: int) -> str:
     now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     return (
@@ -90,11 +123,28 @@ def _format_header(total: int) -> str:
     )
 
 
+def _follow_keyboard(thread_id: str) -> InlineKeyboardMarkup:
+    btn = InlineKeyboardButton(
+        "🔔 Follow",
+        callback_data=f"{_CB_FOLLOW}{thread_id}",
+    )
+    return InlineKeyboardMarkup([[btn]])
+
+def _unfollow_keyboard(thread_id: str) -> InlineKeyboardMarkup:
+    btn = InlineKeyboardButton(
+        "🔕 Unfollow",
+        callback_data=f"{_CB_UNFOLLOW}{thread_id}",
+    )
+    return InlineKeyboardMarkup([[btn]])
+
+
+
 # ------------------------------------------------------------------ #
-#  Scrape job                                                          #
+#  Send helpers                                                        #
 # ------------------------------------------------------------------ #
 
-async def send_to(bot: Bot, chat_id: int, text: str) -> bool:
+async def send_to(bot: Bot, chat_id: int, text: str,
+                  reply_markup: InlineKeyboardMarkup | None = None) -> bool:
     """Send one HTML message to one chat. Returns True on success."""
     try:
         await bot.send_message(
@@ -102,6 +152,7 @@ async def send_to(bot: Bot, chat_id: int, text: str) -> bool:
             text=text,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
+            reply_markup=reply_markup,
         )
         return True
     except Forbidden:
@@ -112,52 +163,140 @@ async def send_to(bot: Bot, chat_id: int, text: str) -> bool:
         return False
 
 
+# ------------------------------------------------------------------ #
+#  Scrape job                                                          #
+# ------------------------------------------------------------------ #
+
 async def broadcast_new_threads(context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_ids = subscribers.load()
     if not chat_ids:
         log.info("No subscribers yet — nothing to send.")
         return
 
-    threads = scraper.fetch_new_threads()
-    if not threads:
+    all_threads = scraper.fetch_new_threads()
+    if not all_threads:
         log.info("No new threads to send.")
         return
 
+    # Split into new (broadcast to all) vs updated (notify followers only)
+    new_threads     = [t for t in all_threads if t.status == "new"]
+    updated_threads = [t for t in all_threads if t.status == "updated"]
+
     log.info(
-        "Broadcasting %d thread(s) to %d subscriber(s)",
-        len(threads), len(chat_ids),
+        "Broadcast: %d new thread(s) to %d subscriber(s); "
+        "%d updated thread(s) → follower notifications",
+        len(new_threads), len(chat_ids), len(updated_threads),
     )
 
     all_blocked: set[int] = set()
-    total_sent = 0
 
-    # Send header
-    header = _format_header(len(threads))
-    for chat_id in chat_ids:
-        ok = await send_to(context.bot, chat_id, header)
-        if not ok:
-            all_blocked.add(chat_id)
-
-    # Send one message per thread
-    for i, thread in enumerate(threads, start=1):
-        msg = _format_thread(thread)
+    # ---- Digest of new threads → all subscribers --------------------
+    if new_threads:
+        header = _format_header(len(new_threads))
         for chat_id in chat_ids:
-            if chat_id in all_blocked:
-                continue
-            ok = await send_to(context.bot, chat_id, msg)
-            if ok:
-                total_sent += 1
-            else:
+            ok = await send_to(context.bot, chat_id, header)
+            if not ok:
                 all_blocked.add(chat_id)
 
-        log.debug("Thread #%d/%d done", i, len(threads))
+        for i, thread in enumerate(new_threads, start=1):
+            msg      = _format_thread(thread)
+            keyboard = _follow_keyboard(thread.id)
+
+            for chat_id in chat_ids:
+                if chat_id in all_blocked:
+                    continue
+                ok = await send_to(context.bot, chat_id, msg, reply_markup=keyboard)
+                if not ok:
+                    all_blocked.add(chat_id)
+
+            log.debug("New thread #%d/%d done", i, len(new_threads))
+            time.sleep(0.01)
+
+    # ---- Follower notifications for updated threads -----------------
+    for thread in updated_threads:
+        follower_ids = follows.get_followers(thread.id)
+        if not follower_ids:
+            continue
+
+        msg      = _format_update_notification(thread)
+        keyboard = _unfollow_keyboard(thread.id)
+
+        log.info(
+            "Notifying %d follower(s) of updated thread: %s",
+            len(follower_ids), thread.title,
+        )
+
+        for chat_id in follower_ids:
+            ok = await send_to(context.bot, chat_id, msg, reply_markup=keyboard)
+            if not ok:
+                follows.unfollow(thread.id, chat_id)
+
         time.sleep(0.01)
 
+    # ---- Clean up blocked subscribers -------------------------------
     if all_blocked:
         subscribers.remove_many(all_blocked)
+        for chat_id in all_blocked:
+            follows.remove_subscriber(chat_id)
         log.info("Auto-removed %d blocked subscriber(s)", len(all_blocked))
 
-    log.info("Broadcast complete — %d total send(s)", total_sent)
+    log.info("Broadcast complete.")
+
+
+# ------------------------------------------------------------------ #
+#  Inline button callbacks                                             #
+# ------------------------------------------------------------------ #
+
+async def on_follow_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 🔔 Follow / 🔕 Unfollow button presses."""
+    query   = update.callback_query
+    chat_id = query.message.chat_id
+    data    = query.data or ""
+
+    await query.answer()   # acknowledge immediately to remove the spinner
+
+    if data.startswith(_CB_FOLLOW):
+        thread_id = data[len(_CB_FOLLOW):]
+        is_new    = follows.follow(thread_id, chat_id)
+        if is_new:
+            notice = "🔔 You'll be notified when this thread is updated."
+        else:
+            notice = "🔔 Already following this thread."
+
+        # Flip the button to Unfollow
+        new_keyboard = _unfollow_keyboard(thread_id)
+        try:
+            await query.edit_message_reply_markup(reply_markup=new_keyboard)
+        except TelegramError:
+            pass   # message too old to edit — harmless
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=notice,
+        )
+
+    elif data.startswith(_CB_UNFOLLOW):
+        thread_id = data[len(_CB_UNFOLLOW):]
+        was_following = follows.unfollow(thread_id, chat_id)
+        if was_following:
+            notice = "🔕 Unfollowed. You won't receive further updates for this thread."
+        else:
+            notice = "ℹ️ You weren't following this thread."
+
+        # Flip the button to Follow
+        new_keyboard = _follow_keyboard(thread_id)
+        try:
+            await query.edit_message_reply_markup(reply_markup=new_keyboard)
+        except TelegramError:
+            pass
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=notice,
+        )
+
+    else:
+        log.warning("Unknown callback data: %r", data)
 
 
 # ------------------------------------------------------------------ #
@@ -173,9 +312,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         log.info("/start from %s (chat=%d) — subscribed", first_name, chat_id)
         await update.message.reply_html(
             f"👋 <b>Welcome to Kernel Lore Bot!</b>\n\n"
-            f"You'll receive a daily digest of Linux kernel mailing list threads.\n\n"
-            f"🆕 = new thread  🔄 = updated thread\n"
-            f"<b>Bold lines</b> = new since last digest\n\n"
+            f"You'll receive a daily digest of <b>new</b> Linux kernel mailing list threads.\n\n"
+            f"🆕 = new thread  🔄 = updated thread\n\n"
+            f"Tap <b>🔔 Follow</b> on any thread to get notified when it receives updates.\n\n"
             f"Commands:\n"
             f"<code>/start</code>  — subscribe to the daily digest\n"
             f"<code>/stop</code>   — unsubscribe\n"
@@ -192,12 +331,13 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id    = update.effective_chat.id
     first_name = update.effective_user.first_name or "someone"
     was_subbed = subscribers.remove(chat_id)
+    follows.remove_subscriber(chat_id)
 
     log.info("/stop from %s (chat=%d)", first_name, chat_id)
 
     if was_subbed:
         await update.message.reply_text(
-            "👋 You've been unsubscribed.\n"
+            "👋 You've been unsubscribed and removed from all thread follows.\n"
             "Send /start any time to re-subscribe."
         )
     else:
@@ -206,8 +346,18 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
-    if chat_id in subscribers.load():
-        await update.message.reply_text("✅ You are subscribed to the daily kernel digest.")
+    subbed  = chat_id in subscribers.load()
+
+    # Count how many threads this user is following
+    all_follows = follows._load_raw()
+    following_count = sum(1 for fids in all_follows.values() if chat_id in fids)
+
+    if subbed:
+        msg = (
+            f"✅ You are subscribed to the daily kernel digest.\n"
+            f"🔔 Following <b>{following_count}</b> thread(s) for updates."
+        )
+        await update.message.reply_html(msg)
     else:
         await update.message.reply_text("❌ You are not subscribed. Send /start to subscribe.")
 
@@ -274,6 +424,7 @@ def run_bot() -> None:
         ApplicationBuilder()
         .token(config.TELEGRAM_BOT_TOKEN)
         .post_init(set_command_menus)
+        .arbitrary_callback_data(True)
         .build()
     )
 
@@ -281,6 +432,9 @@ def run_bot() -> None:
     app.add_handler(CommandHandler("stop",   stop))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("scrape", scrape))
+
+    # Inline button handler — must come after command handlers
+    app.add_handler(CallbackQueryHandler(on_follow_button))
 
     app.job_queue.run_repeating(
         broadcast_new_threads,

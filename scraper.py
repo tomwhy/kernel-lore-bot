@@ -142,9 +142,7 @@ def _parse_mbox_message(msg: Message) -> Optional[Entry]:
 
         raw_date = msg["Date"] or ""
         try:
-            updated = parsedate_to_datetime(raw_date)
-            if updated.tzinfo is None:
-                updated = updated.replace(tzinfo=timezone.utc)
+            updated = parsedate_to_datetime(raw_date).astimezone(timezone.utc)
         except Exception:
             updated = datetime.now(timezone.utc)
 
