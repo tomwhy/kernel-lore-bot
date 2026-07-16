@@ -44,6 +44,54 @@ Delivery stays Telegram-only. No notifier abstraction is in scope.
 7. `README.md` describes an architecture that no longer exists (`notifier.py`,
    `state.py`, `seen_threads.json`, keyword classification, `--test`/`--now`).
 
+### Defects found while writing the plan
+
+These were found by running the current code against real lore data, after this
+spec was first approved. All are fixed by the plan and pinned by named tests.
+
+8. **Empty mbox aborts the whole scrape.** `iter_mbox_emails("")` calls
+   `next(seps)` on an empty match iterator; PEP 479 converts the resulting
+   `StopIteration` into `RuntimeError`. `_fetch_thread_tree` only guards
+   `mbox_text is None`, so an empty body or an HTML error page from lore
+   propagates up and kills the run — no digest is sent. Verified by execution.
+9. **Orphaned replies are silently dropped.** Roots are `[e for e in entries if
+   not e.is_reply]` and children are attached only when the parent is present in
+   the same mbox, so a reply whose `In-Reply-To` points outside the mbox is
+   neither a root nor anybody's child. It vanishes from the tree and from the
+   "N new entries" count.
+10. **A malformed `<updated>` in a feed aborts the scrape.**
+    `_fetch_list_entries` calls `datetime.fromisoformat(updated_raw)` with no
+    guard; the `except` clause covers only `RequestException` and `ParseError`,
+    so one bad entry raises an uncaught `ValueError`.
+11. **A truncated download aborts the scrape.** `gzip.decompress` raises
+    `EOFError` on a truncated gzip, which is neither `gzip.BadGzipFile` nor an
+    `OSError`, so `except gzip.BadGzipFile` misses it. Verified by execution.
+12. **The thread URL is interpolated into `href="..."` unescaped.** The URL is
+    built from the Message-ID, an untrusted email header, and Telegram renders
+    the message as HTML, so a quote in a Message-ID can break out of the
+    attribute.
+13. **Buttons from before a restart crash their handler.** With
+    `arbitrary_callback_data(True)`, python-telegram-bot caches callback payloads
+    in memory and returns an `InvalidCallbackData` **object** after a restart.
+    `on_follow_button` does `data = query.data or ""` then `data.startswith(...)`,
+    raising `AttributeError` and leaving the user with a spinner and no reply.
+14. **`ADMIN_CHAT_ID = 0` grants admin to chat 0.** `_is_admin` compares
+    `chat_id != config.ADMIN_CHAT_ID`, so with the documented "disabled" value of
+    `0`, a chat with id `0` compares equal. Not exploitable (no real Telegram
+    chat has id 0), but the code contradicts its own documentation.
+
+### Environment findings
+
+- **lore.kernel.org returns HTTP 403 without a `User-Agent`.** Confirmed by
+  request. The bot already sends one; this constrains how fixtures are gathered.
+- **The console encoding on the development machine is cp1255**, so `print()` of
+  an emoji raises `UnicodeEncodeError`. `main.py --dry` prints emoji directly and
+  would crash. The new `cli.py` reconfigures stdout to UTF-8. Telegram delivery
+  is unaffected.
+- **`Path.read_text()` with no encoding** (used by `subscribers.py` and
+  `follows.py`) decodes using the locale codepage, not UTF-8. `JsonStore` passes
+  `encoding="utf-8"` explicitly.
+
 ## Guiding principle
 
 Everything that decides is a pure function; everything that touches the world
@@ -232,7 +280,19 @@ schedule, and observable bot behavior.
 
 Intentional changes, all of them defect fixes named above: blocking sleep
 becomes `await asyncio.sleep`; writes become atomic; the two state files become
-one (with migration); `/status` stops using a private function.
+one (with migration); `/status` stops using a private function; the four crash
+paths (8, 10, 11, 13) degrade to skipping one item instead of killing the run;
+orphaned replies survive (9); the thread URL is escaped (12); `ADMIN_CHAT_ID = 0`
+disables admin as documented (14).
+
+Two signature changes fall out of making formatting pure: `format_header` takes
+`now` as an argument rather than reading the clock, and `format_thread` takes a
+`Classified` pair rather than a mutable `status` attribute on `Thread`.
+
+One cosmetic loss: `HttpClient.get` returns whole bytes, so the per-download
+byte-level progress bar inside the old `_fetch_mbox` goes away. Progress is kept
+at the list and entry level. This is the price of keeping `requests` from leaking
+past `http.py`.
 
 ## Out of scope
 
