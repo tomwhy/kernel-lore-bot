@@ -60,8 +60,15 @@ def parse_message(msg: Message) -> Optional[Entry]:
 
         title = decode_header_value((msg["Subject"] or "").strip())
 
+        # Split the raw (still RFC 2047-encoded) header first, then decode
+        # only the display-name part. Decoding before splitting is unsafe:
+        # a decoded display name can itself contain '<', '>', '"', or ','
+        # (e.g. an encoded-word that decodes to `Foo <Bar>`), which would
+        # confuse parseaddr's address-vs-display-name tokenizing. The
+        # address portion is always plain ASCII per RFC 5322, so it needs
+        # no decoding regardless of order.
         display_name, addr = parseaddr(msg["From"] or "")
-        author = display_name.strip() or addr.strip() or "Unknown"
+        author = decode_header_value(display_name).strip() or addr.strip() or "Unknown"
 
         try:
             updated = parsedate_to_datetime(msg["Date"] or "").astimezone(timezone.utc)

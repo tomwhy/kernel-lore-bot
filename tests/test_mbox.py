@@ -1,6 +1,14 @@
 from kernel_lore_bot.sources.lore import mbox
 
 
+def _single_entry(mbox_text):
+    entries = [
+        e for e in map(mbox.parse_message, mbox.iter_messages(mbox_text)) if e is not None
+    ]
+    assert len(entries) == 1
+    return entries[0]
+
+
 def test_iter_messages_yields_each_message(fixture_text):
     assert len(list(mbox.iter_messages(fixture_text("thread_mt6392.mbox")))) == 11
 
@@ -136,3 +144,80 @@ def test_build_thread_on_pure_cycle_does_not_recurse_forever():
     assert thread is not None
     ids = {n.entry.id for n in thread.walk()}
     assert ids == {"D", "E"}
+
+
+# DEFECT 20: the From header's display name must be RFC 2047-decoded, the
+# same way the Subject already is via decode_header_value. parseaddr alone
+# does not decode encoded-words, so an encoded author reached users as
+# mojibake like "=?utf-8?q?Bj=C3=B6rn_Andersson?=".
+
+
+def test_parse_message_decodes_rfc2047_author_display_name():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: =?utf-8?q?Bj=C3=B6rn_Andersson?= <bjorn@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <a@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    assert _single_entry(text).author == "Björn Andersson"
+
+
+def test_parse_message_leaves_plain_ascii_author_unchanged():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Dave Davis <dave@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <b@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    assert _single_entry(text).author == "Dave Davis"
+
+
+def test_parse_message_falls_back_to_bare_address_when_no_display_name():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: nodisplayname@example.com\n"
+        "Subject: test\n"
+        "Message-Id: <c@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    assert _single_entry(text).author == "nodisplayname@example.com"
+
+
+def test_parse_message_decodes_author_safely_when_decoded_text_looks_like_an_address():
+    # If the raw header were decoded *before* splitting, this decoded display
+    # name ("Evil <admin@example.com>") would itself contain '<' and '>' and
+    # would confuse parseaddr into extracting the wrong "address" (or none at
+    # all) instead of the real one. Splitting first (on the still-encoded raw
+    # header) and decoding only the extracted display-name part sidesteps
+    # this entirely, because parseaddr never sees the confusing characters.
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: =?utf-8?b?RXZpbCA8YWRtaW5AZXhhbXBsZS5jb20+?= <real@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <d@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    entry = _single_entry(text)
+    assert entry.author == "Evil <admin@example.com>"
+
+
+def test_real_malformed_fixture_author_is_decoded(fixture_text):
+    # tests/fixtures/lore/thread_malformed.mbox has an RFC 2047-encoded From
+    # header. No existing test previously asserted its (buggy, encoded)
+    # author value, so this is a new assertion, not a changed one.
+    first = next(
+        e
+        for e in map(mbox.parse_message, mbox.iter_messages(fixture_text("thread_malformed.mbox")))
+        if e is not None and e.id == "malformed-1@example.com"
+    )
+    assert first.author == "Björn Andersson"
