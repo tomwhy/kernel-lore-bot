@@ -208,6 +208,70 @@ def test_empty_mbox_body_skips_only_that_thread(conftest_fake_client):
     assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
 
 
+def _corrupted_gzip(text: str) -> bytes:
+    # Flip a byte well inside the compressed body (past the 10-byte gzip
+    # header) so gzip.decompress raises zlib.error rather than BadGzipFile.
+    # Index 20 was verified empirically to reliably trigger
+    # "invalid code -- missing end-of-block" for this fixture's payload shape.
+    data = bytearray(_mbox_gz(text))
+    data[20] ^= 0xFF
+    return bytes(data)
+
+
+def test_corrupted_gzip_bit_flip_skips_only_that_thread(conftest_fake_client):
+    # DEFECT 16: a bit flipped mid-stream (not a truncation) makes
+    # gzip.decompress raise zlib.error, which is neither gzip.BadGzipFile nor
+    # EOFError. The old code only caught those two, so this exception used to
+    # propagate out of fetch_threads() and kill the entire run.
+    corrupted = _corrupted_gzip(_thread_mbox("corrupt@x.com"))
+    client = conftest_fake_client(
+        {
+            FEED: [
+                _feed(
+                    ("corrupt@x.com", "2026-07-16T15:00:00Z"),
+                    ("good@x.com", "2026-07-16T14:00:00Z"),
+                ),
+                _feed(),
+            ],
+            f"{BASE}/all/corrupt@x.com/t.mbox.gz": [corrupted],
+            f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
+        }
+    )
+    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
+
+
+def test_corrupted_gzip_in_one_list_does_not_kill_a_later_list(conftest_fake_client):
+    # DEFECT 16, end-to-end across lists: the corrupted gzip must not blow up
+    # fetch_threads() itself, so a second, unrelated list in the same run
+    # still gets fetched.
+    other_feed = f"{BASE}/netdev/new.atom"
+    corrupted = _corrupted_gzip(_thread_mbox("corrupt@x.com"))
+    client = conftest_fake_client(
+        {
+            FEED: [_feed(("corrupt@x.com", "2026-07-16T15:00:00Z")), _feed()],
+            f"{BASE}/all/corrupt@x.com/t.mbox.gz": [corrupted],
+            other_feed: [_feed(("ok@x.com", "2026-07-16T15:00:00Z")), _feed()],
+            f"{BASE}/all/ok@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("ok@x.com"))],
+        }
+    )
+    threads = list(_source(client, lists=("linux-input", "netdev")).fetch_threads(SINCE))
+    assert [t.id for t in threads] == ["ok@x.com"]
+
+
+def test_pagination_terminates_when_server_repeats_the_same_page(conftest_fake_client):
+    # DEFECT 17: a server that ignores the `t` param and keeps returning the
+    # same non-empty page must not hang the run. Every page has the same
+    # entry, so the computed next `t` never advances -- the progress guard
+    # must end the list instead of looping forever.
+    same_page = _feed(("stuck@x.com", "2026-07-16T15:00:00Z"))
+    client = conftest_fake_client({FEED: [same_page] * 500})
+    threads = list(_source(client).fetch_threads(SINCE))
+    # Fetched the one entry the (broken) server ever offers, then stopped.
+    feed_calls = [c for c in client.calls if c["url"] == FEED]
+    assert len(feed_calls) < 500
+    assert len(feed_calls) <= 3
+
+
 def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
     # DEFECT 11: a cut connection yields a truncated gzip. gzip.decompress raises
     # EOFError, which is neither BadGzipFile nor OSError, so the old

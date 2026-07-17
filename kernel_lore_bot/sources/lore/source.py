@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import gzip
 import logging
+import zlib
 from datetime import datetime, timedelta, timezone
 from typing import Iterator, Optional
 
@@ -21,6 +22,13 @@ from kernel_lore_bot.sources.lore import mbox as mbox_parser
 from kernel_lore_bot.sources.lore.atom import FeedEntry, FeedParseError, parse_feed_page
 
 log = logging.getLogger(__name__)
+
+# Generous upper bound on pages fetched per mailing list in a single run. Lore's
+# atom pages carry ~50 entries each, so this caps a single list's backfill at
+# roughly 500k entries -- far beyond any real mailing list's total thread count
+# -- while still guaranteeing termination against a server that keeps advancing
+# `t` forever (e.g. a page-size-1 feed that never repeats).
+MAX_FEED_PAGES_PER_LIST = 10_000
 
 
 class LoreSource:
@@ -70,7 +78,7 @@ class LoreSource:
         url = f"{self.base_url}/{list_name}/new.atom"
         timestamp = datetime.now(timezone.utc)
 
-        while True:
+        for _ in range(MAX_FEED_PAGES_PER_LIST):
             try:
                 data = self.client.get(url, params={"t": timestamp.strftime("%Y%m%d%H%M%S")})
                 entries = parse_feed_page(data)
@@ -87,7 +95,26 @@ class LoreSource:
                 yield entry
 
             # Next page starts just before the oldest entry we just saw.
-            timestamp = entries[-1].updated - timedelta(seconds=1)
+            next_timestamp = entries[-1].updated - timedelta(seconds=1)
+            if next_timestamp >= timestamp:
+                # The server didn't honor `t` (or the feed is misbehaving) and
+                # kept handing back a page that doesn't move us backwards in
+                # time. Without this guard we'd request the same page forever.
+                log.warning(
+                    "List %s stopped paginating: page at t=%s did not advance "
+                    "(next would be t=%s); server may be ignoring the t param",
+                    list_name,
+                    timestamp,
+                    next_timestamp,
+                )
+                return
+            timestamp = next_timestamp
+        else:
+            log.warning(
+                "List %s hit the %d-page cap without exhausting the feed; stopping",
+                list_name,
+                MAX_FEED_PAGES_PER_LIST,
+            )
 
     def _fetch_thread(self, entry_id: str, list_name: str) -> Optional[Thread]:
         url = f"{self.base_url}/all/{entry_id}/t.mbox.gz"
@@ -101,10 +128,15 @@ class LoreSource:
             raw = gzip.decompress(raw)
         except gzip.BadGzipFile:
             pass  # server sent an uncompressed mbox; use the bytes as-is
-        except EOFError as exc:
-            # Truncated gzip (connection cut mid-download). Not a BadGzipFile,
-            # not even an OSError, so it must be caught by name.
-            log.warning("Truncated gzip mbox at %s: %s", url, exc)
+        except (EOFError, zlib.error) as exc:
+            # Any other way a gzip body can be broken: EOFError for a truncated
+            # stream (connection cut mid-download, neither BadGzipFile nor
+            # OSError so it must be caught by name), zlib.error for corruption
+            # mid-stream (e.g. a flipped bit) that isn't a header/CRC problem.
+            # This except clause runs only when the body IS gzip-shaped but
+            # broken -- the BadGzipFile clause above already claimed the
+            # "not gzip at all" case, so that plaintext fallback is untouched.
+            log.warning("Corrupted/truncated gzip mbox at %s: %s", url, exc)
             return None
 
         thread = mbox_parser.parse_thread(raw.decode("utf-8", errors="replace"), list_name)
