@@ -1,0 +1,122 @@
+"""
+Pure mbox parsing. This module performs no I/O.
+
+lore serves each thread as a gzipped mbox at
+`<base>/all/<message-id>/t.mbox.gz`, using mboxrd: messages are separated by a
+constant `From mboxrd@z ...` line, and body lines beginning with "From " are
+escaped to ">From ". That is why splitting on `^From ` is safe here.
+"""
+
+from __future__ import annotations
+
+import email
+import email.header
+import logging
+import re
+from datetime import datetime, timezone
+from email.message import Message
+from email.utils import parseaddr, parsedate_to_datetime
+from typing import Iterator, Optional
+
+from kernel_lore_bot.models import Entry, Node, Reply, Thread
+
+log = logging.getLogger(__name__)
+
+LORE_BASE_URL = "https://lore.kernel.org"
+
+_MBOX_SEP_RE = re.compile(r"^From ", re.MULTILINE)
+
+
+def iter_messages(mbox_text: str) -> Iterator[Message]:
+    """
+    Split an mbox into messages.
+
+    Yields nothing when the text contains no separator line — an empty body or
+    an HTML error page from lore must not raise.
+    """
+    starts = [m.start() for m in _MBOX_SEP_RE.finditer(mbox_text)]
+    if not starts:
+        return
+    bounds = starts + [len(mbox_text)]
+    for i in range(len(starts)):
+        yield email.message_from_string(mbox_text[bounds[i]:bounds[i + 1]])
+
+
+def decode_header_value(raw: str) -> str:
+    """Decode an RFC 2047 encoded header into plain text."""
+    parts = email.header.decode_header(raw)
+    return "".join(
+        part.decode(enc or "utf-8", errors="replace") if isinstance(part, bytes) else part
+        for part, enc in parts
+    )
+
+
+def parse_message(msg: Message) -> Optional[Entry]:
+    """Convert one mbox message into an Entry, or None if it is unusable."""
+    try:
+        msgid = (msg["Message-ID"] or "").strip().strip("<>")
+        if not msgid:
+            return None
+
+        title = decode_header_value((msg["Subject"] or "").strip())
+
+        display_name, addr = parseaddr(msg["From"] or "")
+        author = display_name.strip() or addr.strip() or "Unknown"
+
+        try:
+            updated = parsedate_to_datetime(msg["Date"] or "").astimezone(timezone.utc)
+        except Exception:
+            updated = datetime.now(timezone.utc)
+
+        in_reply_to = (msg["In-Reply-To"] or "").strip().strip("<>")
+
+        return Entry(
+            id=msgid,
+            title=title,
+            url=f"{LORE_BASE_URL}/all/{msgid}",
+            author=author,
+            updated=updated,
+            reply=Reply(ref=in_reply_to) if in_reply_to else None,
+        )
+    except Exception as exc:  # noqa: BLE001 - one bad message must not kill a thread
+        log.debug("Skipping malformed mbox message: %s", exc)
+        return None
+
+
+def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Thread]:
+    """
+    Assemble entries into a thread tree.
+
+    A reply whose In-Reply-To does not resolve inside this mbox is promoted to a
+    root rather than dropped. More than one root signals a split thread and is
+    kept as-is.
+    """
+    if not entries:
+        return None
+
+    by_id = {e.id: e for e in entries}
+    children_map: dict[str, list[Entry]] = {e.id: [] for e in entries}
+
+    for entry in entries:
+        if entry.is_reply and entry.reply.ref in children_map:
+            children_map[entry.reply.ref].append(entry)
+
+    roots = [e for e in entries if not e.is_reply or e.reply.ref not in by_id]
+    if not roots:
+        # Every message replies to another in a cycle; fall back to the first.
+        roots = [entries[0]]
+        log.debug("No root found in thread — using first message as root")
+    elif len(roots) > 1:
+        log.debug("%d roots found — grouping under a single Thread", len(roots))
+
+    def _build(entry: Entry) -> Node:
+        kids = sorted(children_map.get(entry.id, []), key=lambda e: e.updated)
+        return Node(entry=entry, children=tuple(_build(k) for k in kids))
+
+    return Thread(roots=tuple(_build(r) for r in roots), mailing_list=mailing_list)
+
+
+def parse_thread(mbox_text: str, mailing_list: str = "") -> Optional[Thread]:
+    """Parse a whole mbox into a Thread, or None if nothing usable is present."""
+    entries = [e for e in map(parse_message, iter_messages(mbox_text)) if e is not None]
+    return build_thread(entries, mailing_list)

@@ -1,20 +1,18 @@
 """
-Characterization tests: they lock in the CURRENT behavior of scraper.py so the
-extraction in Task 5 can be proven behavior-preserving. Task 5 repoints the
-imports at kernel_lore_bot.sources.lore.mbox; the assertions must not change.
+Characterization tests: they now cover the extracted kernel_lore_bot.sources.lore.mbox
+module. They originally locked in the behavior of the old scraper.py so the
+extraction in Task 5 could be proven behavior-preserving; the assertions below
+are unchanged from that baseline except for the empty-mbox test, which is
+inverted because Task 5 fixes the RuntimeError defect it used to lock in.
 """
 
 from datetime import timezone
 
-import pytest
-
-import scraper
+from kernel_lore_bot.sources.lore import mbox
 
 
 def _entries(text):
-    return list(
-        filter(None, map(scraper._parse_mbox_message, scraper.iter_mbox_emails(text)))
-    )
+    return [e for e in map(mbox.parse_message, mbox.iter_messages(text)) if e is not None]
 
 
 def test_real_thread_parses_every_message(fixture_text):
@@ -85,8 +83,6 @@ def test_message_without_message_id_is_dropped(fixture_text):
     assert [e.id for e in entries] == ["malformed-1@example.com"]
 
 
-def test_empty_mbox_currently_raises_runtime_error():
-    # DEFECT: PEP 479 turns the StopIteration from next(seps) into RuntimeError,
-    # which aborts the entire scrape. Task 5 fixes this and inverts this test.
-    with pytest.raises(RuntimeError):
-        list(scraper.iter_mbox_emails(""))
+def test_empty_mbox_no_longer_raises():
+    # Was: RuntimeError from PEP 479, which aborted the entire scrape.
+    assert list(mbox.iter_messages("")) == []
