@@ -297,3 +297,52 @@ async def test_a_follower_transient_telegram_error_does_not_unfollow():
     await _broadcaster([old], store).run(bot, now=NOW)
 
     assert store.followers("old@x.com") == [5]
+
+
+# -- concurrency guard: collect() runs on a worker thread (defect 18), so two
+# broadcasts can genuinely overlap and would share one Source/requests.Session,
+# which is not thread-safe. run() must serialize.
+
+
+async def test_concurrent_run_calls_do_not_interleave_their_scrapes():
+    """
+    Simulates the scheduled job and an admin's /scrape firing at the same
+    time. Both share one Broadcaster (and thus one Source). Without a lock,
+    asyncio.to_thread would let both scrapes run on separate worker threads
+    at once; with the lock, the second run() waits for the first to finish
+    before its scrape starts.
+    """
+    events: list[str] = []
+
+    class TrackingSource:
+        def fetch_threads(self, since):
+            events.append("enter")
+            time.sleep(0.05)  # real blocking work, like requests.get()
+            events.append("exit")
+            return []
+
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    b = Broadcaster(Settings(), store, TrackingSource())
+
+    await asyncio.gather(
+        b.run(FakeBot(), now=NOW),
+        b.run(FakeBot(), now=NOW),
+    )
+
+    # Each "enter" must be immediately followed by its own "exit" — never
+    # enter, enter, exit, exit, which would mean the scrapes overlapped.
+    assert events == ["enter", "exit", "enter", "exit"]
+
+
+async def test_broadcaster_constructed_outside_a_running_loop_can_still_run():
+    """
+    cli.py constructs Broadcaster from plain synchronous code, before any
+    event loop is running (build_components/Broadcaster() happen outside
+    asyncio.run). The lock must not be created eagerly at construction time —
+    doing so risks binding to a loop that isn't the one run() is later
+    awaited on.
+    """
+    store = InMemoryStore()
+    b = _broadcaster([], store)  # constructed with no loop running
+    await b.run(FakeBot(), now=NOW)  # now a loop exists; must not raise

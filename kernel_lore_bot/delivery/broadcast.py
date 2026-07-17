@@ -85,6 +85,11 @@ class Broadcaster:
         self.store = store
         self.source = source
         self.filters = list(filters)
+        # Created lazily in run(), not here: Broadcaster is constructed in
+        # cli.py before any event loop is running, and binding an
+        # asyncio.Lock to "whatever loop happens to be current" at
+        # construction time risks tying it to the wrong loop.
+        self._lock: Optional[asyncio.Lock] = None
 
     def cutoff(self, now: Optional[datetime] = None) -> datetime:
         now = now or datetime.now(timezone.utc)
@@ -103,6 +108,18 @@ class Broadcaster:
         return classify(kept, cutoff)
 
     async def run(self, bot, now: Optional[datetime] = None) -> None:
+        # collect() now runs on a worker thread (see below), so the
+        # scheduled job and an admin's /scrape can genuinely run at the same
+        # time. Both would share this Broadcaster's self.source and its
+        # requests.Session, which is not thread-safe — serialize here so the
+        # second caller waits instead of racing the first.
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+
+        async with self._lock:
+            await self._run_locked(bot, now)
+
+    async def _run_locked(self, bot, now: Optional[datetime] = None) -> None:
         now = now or datetime.now(timezone.utc)
 
         subscriber_ids = self.store.subscribers()
