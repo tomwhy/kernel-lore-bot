@@ -1,0 +1,14 @@
+From mboxrd@z Thu Jan  1 00:00:00 1970
+From: =?utf-8?q?Bj=C3=B6rn_Andersson?= <bjorn@example.com>
+Subject: =?utf-8?q?[PATCH]_caf=C3=A9_support?=
+Date: not a real date
+Message-Id: <malformed-1@example.com>
+
+Body one.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+From: Dave Davis <dave@example.com>
+Subject: [PATCH] no message id at all
+Date: Mon, 15 Jun 2026 13:00:00 +0000
+
+Body two.
