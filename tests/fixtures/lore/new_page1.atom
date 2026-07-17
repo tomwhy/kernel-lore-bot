@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:thr="http://purl.org/syndication/thread/1.0">
+  <title>linux-input.vger.kernel.org archive mirror</title>
+  <updated>2026-07-16T15:55:52Z</updated>
+  <entry>
+    <author><name>Lee Jones</name><email>lee@kernel.org</email></author>
+    <title>Re: [PATCH v9 0/9] Add support for MT6392 PMIC</title>
+    <updated>2026-07-16T15:55:52Z</updated>
+    <link href="https://lore.kernel.org/linux-input/newest-1@example.com/"/>
+    <id>urn:uuid:3ba6483b-0ff4-5dad-9f3e-76d20551c159</id>
+  </entry>
+  <entry>
+    <author><name>Mario Limonciello</name><email>superm1@kernel.org</email></author>
+    <title type="html">Re: [PATCH v4] HID: i2c-hid: Fix &#34;(null)&#34; output</title>
+    <updated>2026-07-16T13:50:26Z</updated>
+    <link href="https://lore.kernel.org/linux-input/newest-2@example.com/"/>
+    <id>urn:uuid:704e576e-c618-56c9-577c-359b47d04750</id>
+  </entry>
+</feed>
