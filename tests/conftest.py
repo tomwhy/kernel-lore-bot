@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -55,3 +56,66 @@ class FakeHttpClient:
 @pytest.fixture
 def conftest_fake_client():
     return FakeHttpClient
+
+
+class FakeBot:
+    """Records outgoing messages instead of calling Telegram."""
+
+    def __init__(self, fail_for: set[int] | None = None):
+        self.sent: list[dict] = []
+        self.fail_for = fail_for or set()
+
+    async def send_message(self, chat_id, text, **kwargs):
+        if chat_id in self.fail_for:
+            from telegram.error import Forbidden
+
+            raise Forbidden("bot was blocked by the user")
+        self.sent.append({"chat_id": chat_id, "text": text, **kwargs})
+
+    def texts_to(self, chat_id: int) -> list[str]:
+        return [m["text"] for m in self.sent if m["chat_id"] == chat_id]
+
+
+class FakeMessage:
+    def __init__(self):
+        self.replies: list[dict] = []
+
+    async def reply_text(self, text, **kwargs):
+        self.replies.append({"text": text, "html": False, **kwargs})
+
+    async def reply_html(self, text, **kwargs):
+        self.replies.append({"text": text, "html": True, **kwargs})
+
+
+class FakeQuery:
+    def __init__(self, data, chat_id):
+        self.data = data
+        self.message = SimpleNamespace(chat_id=chat_id)
+        self.answered = False
+        self.answer_text: str | None = None
+        self.markups: list = []
+        self.edit_error: Exception | None = None
+
+    async def answer(self, text=None, **kwargs):
+        self.answered = True
+        self.answer_text = text
+
+    async def edit_message_reply_markup(self, reply_markup=None):
+        if self.edit_error:
+            raise self.edit_error
+        self.markups.append(reply_markup)
+
+
+class FakeUpdate:
+    def __init__(self, chat_id=1, first_name="Ada", callback_data=None):
+        self.effective_chat = SimpleNamespace(id=chat_id)
+        self.effective_user = SimpleNamespace(first_name=first_name)
+        self.message = FakeMessage()
+        self.callback_query = (
+            FakeQuery(callback_data, chat_id) if callback_data is not None else None
+        )
+
+
+class FakeContext:
+    def __init__(self, bot=None):
+        self.bot = bot or FakeBot()
