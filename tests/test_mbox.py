@@ -61,6 +61,22 @@ def test_parse_thread_returns_none_for_empty_input():
     assert mbox.parse_thread("") is None
 
 
+def test_parse_thread_uses_the_given_base_url_for_entry_urls(fixture_text):
+    # Finding 4: LoreSource(base_url=...) must flow all the way through to
+    # Entry.url, not just to fetching. Default stays LORE_BASE_URL so
+    # existing pure-parser callers/tests (e.g. test_mbox_real_fixtures.py)
+    # are unaffected.
+    thread = mbox.parse_thread(
+        fixture_text("thread_single.mbox"), base_url="https://mirror.example.com"
+    )
+    assert thread.roots[0].entry.url.startswith("https://mirror.example.com/all/")
+
+
+def test_parse_thread_default_base_url_is_lore_kernel_org(fixture_text):
+    thread = mbox.parse_thread(fixture_text("thread_single.mbox"))
+    assert thread.roots[0].entry.url.startswith("https://lore.kernel.org/all/")
+
+
 def test_parse_thread_returns_none_when_nothing_parses(fixture_text):
     # A message with no Message-ID is dropped; if that leaves nothing, no thread.
     assert mbox.parse_thread("From mboxrd@z Thu Jan  1 00:00:00 1970\nSubject: x\n\nbody\n") is None

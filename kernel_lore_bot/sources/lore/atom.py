@@ -45,7 +45,8 @@ def parse_feed_page(data: bytes) -> list[FeedEntry]:
 
     entries: list[FeedEntry] = []
 
-    for entry_el in root.findall(_tag(ATOM_NS, "entry")):
+    entry_els = root.findall(_tag(ATOM_NS, "entry"))
+    for entry_el in entry_els:
         updated_raw = (entry_el.findtext(_tag(ATOM_NS, "updated")) or "").strip()
         try:
             updated = datetime.fromisoformat(updated_raw)
@@ -61,5 +62,18 @@ def parse_feed_page(data: bytes) -> list[FeedEntry]:
             continue
 
         entries.append(FeedEntry(entry_id=entry_id, updated=updated))
+
+    if entry_els and not entries:
+        # Every <entry> on this page was skipped. A single bad entry is
+        # expected and harmless (logged at debug above), but a page-wide
+        # wipeout is indistinguishable from legitimate end-of-pagination to
+        # the caller (both return []) — if lore ever changed its date format
+        # feed-wide, the bot would go permanently, silently quiet. Surface
+        # that distinction loudly here.
+        log.warning(
+            "All %d entr(ies) on this feed page were unparseable — "
+            "returning no entries (this may look like end-of-pagination)",
+            len(entry_els),
+        )
 
     return entries

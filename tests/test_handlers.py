@@ -186,6 +186,19 @@ async def test_expired_callback_data_is_answered_not_crashed(handlers):
     assert "expired" in (update.callback_query.answer_text or "").lower()
 
 
+async def test_on_button_works_when_message_exposes_only_chat_dot_id(handlers, store):
+    # Finding 5: python-telegram-bot 22 hands back an InaccessibleMessage for
+    # a deleted/too-old message, which has no .chat_id attribute -- only
+    # .chat. FakeQuery.message models that same reduced surface (see
+    # tests/conftest.py); this must not raise AttributeError.
+    update = FakeUpdate(chat_id=1, callback_data="follow:t1@x.com")
+    assert not hasattr(update.callback_query.message, "chat_id")
+
+    await handlers.on_button(update, FakeContext())
+
+    assert store.followers("t1@x.com") == [1]
+
+
 async def test_unknown_callback_data_is_ignored(handlers, store):
     update = FakeUpdate(chat_id=1, callback_data="garbage")
     await handlers.on_button(update, FakeContext())

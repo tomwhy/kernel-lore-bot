@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from kernel_lore_bot.storage.base import BaseStore
@@ -35,7 +36,25 @@ def _load_state(path: Path) -> dict[int, set[str]]:
             for chat, rec in raw.get("subscribers", {}).items()
         }
     except (json.JSONDecodeError, ValueError, AttributeError, TypeError) as exc:
-        log.warning("Could not load %s: %s — starting fresh", path, exc)
+        # The file exists but is unreadable (e.g. a crash landed the rename
+        # before an fsync). Do NOT silently discard it — every subscriber and
+        # follow would be gone with only a warning to show for it. Preserve
+        # the bytes under a timestamped backup name so the data stays
+        # recoverable on disk, log loudly, and only then continue empty.
+        backup = path.with_name(
+            path.name + "." + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
+        )
+        try:
+            os.replace(path, backup)
+            log.error(
+                "Could not parse %s: %s — original preserved at %s, starting fresh",
+                path, exc, backup,
+            )
+        except OSError as replace_exc:
+            log.error(
+                "Could not parse %s: %s — AND could not back it up (%s), starting fresh",
+                path, exc, replace_exc,
+            )
         return {}
 
 
@@ -89,5 +108,14 @@ class JsonStore(BaseStore):
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_name(self._path.name + ".tmp")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        # Flush and fsync the temp file's contents to disk *before* the
+        # rename. os.replace() is atomic w.r.t. the directory entry, but
+        # without an fsync the data itself can still be sitting in the OS
+        # page cache when the rename lands — a host/container crash right
+        # after can leave state.json truncated or zero-length even though
+        # the rename "completed".
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(json.dumps(payload, indent=2))
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, self._path)

@@ -335,6 +335,49 @@ async def test_concurrent_run_calls_do_not_interleave_their_scrapes():
     assert events == ["enter", "exit", "enter", "exit"]
 
 
+# -- finding 1: /stop mid-scrape must not still receive the digest ---
+
+
+async def test_a_chat_that_stops_mid_scrape_receives_nothing():
+    """
+    collect() runs on a worker thread (defect 18), which deliberately frees
+    the event loop for the whole scrape. A user can /stop during that window;
+    the store correctly removes them, but a stale subscriber_ids snapshot
+    taken *before* collect() would still mail them the digest. The fix
+    re-reads store.subscribers() after collect() returns.
+    """
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+
+    class UnsubscribingSource:
+        def fetch_threads(self, since):
+            # Simulates chat 1 sending /stop while the scrape is in flight.
+            store.remove_subscriber(1)
+            return [_thread("a@x.com", NOW)]
+
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, UnsubscribingSource())
+    await b.run(bot, now=NOW)
+
+    assert bot.texts_to(1) == []
+    assert len(bot.texts_to(2)) == 2
+
+
+# -- finding 3: the digest header must use the injected `now` --------
+
+
+async def test_digest_header_uses_the_injected_now_not_wall_clock():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    bot = FakeBot()
+    injected_now = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+    await _broadcaster([_thread("a@x.com", injected_now)], store).run(bot, now=injected_now)
+
+    assert "2020-01-01 00:00 UTC" in bot.texts_to(1)[0]
+
+
 async def test_broadcaster_constructed_outside_a_running_loop_can_still_run():
     """
     cli.py constructs Broadcaster from plain synchronous code, before any

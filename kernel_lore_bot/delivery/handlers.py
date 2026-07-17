@@ -118,7 +118,12 @@ class Handlers:
 
     async def on_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        chat_id = query.message.chat_id
+        # query.message.chat_id, not .chat_id: python-telegram-bot 22 hands
+        # back an InaccessibleMessage for a deleted/too-old message, and
+        # InaccessibleMessage has no .chat_id attribute — only .chat. Both
+        # Message and InaccessibleMessage expose .chat.id, so that's the
+        # surface that works for either.
+        chat_id = query.message.chat.id
         parsed = parse_callback(query.data)
 
         if parsed is None:

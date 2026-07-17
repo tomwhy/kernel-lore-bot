@@ -130,9 +130,15 @@ class Broadcaster:
         cutoff = self.cutoff(now)
         # collect() is a synchronous scrape (blocking HTTP across ~18 mailing
         # lists). Run it off the event loop so /start and button presses keep
-        # being serviced while it's in flight. Safe: collect() only touches
-        # self.source/self.filters, never self.store, so the Store's
-        # single-event-loop-owner assumption is untouched.
+        # being serviced while it's in flight. This is safe from corruption:
+        # collect() only touches self.source/self.filters, never self.store,
+        # so the Store's single-event-loop-owner assumption is untouched.
+        # But the offload deliberately opens a multi-minute window during
+        # which a subscriber can /stop, so the `subscriber_ids` snapshot
+        # taken above is stale by the time collect() returns — it is only
+        # used for the early "nothing to fetch" guard. The actual send below
+        # re-reads self.store.subscribers() so a chat that unsubscribed
+        # mid-scrape does not still receive the digest.
         classified = await asyncio.to_thread(self.collect, cutoff)
         if not classified:
             log.info("No new threads to send.")
@@ -141,6 +147,7 @@ class Broadcaster:
         new = [c for c in classified if c.status is ThreadStatus.NEW]
         updated = [c for c in classified if c.status is ThreadStatus.UPDATED]
 
+        subscriber_ids = self.store.subscribers()
         log.info(
             "Broadcast: %d new thread(s) to %d subscriber(s); "
             "%d updated thread(s) → follower notifications",
@@ -148,7 +155,7 @@ class Broadcaster:
         )
 
         blocked: set[int] = set()
-        await self._send_digest(bot, new, subscriber_ids, cutoff, blocked)
+        await self._send_digest(bot, new, subscriber_ids, cutoff, blocked, now)
         await self._notify_followers(bot, updated)
 
         if blocked:
@@ -157,11 +164,11 @@ class Broadcaster:
 
         log.info("Broadcast complete.")
 
-    async def _send_digest(self, bot, new, subscriber_ids, cutoff, blocked) -> None:
+    async def _send_digest(self, bot, new, subscriber_ids, cutoff, blocked, now) -> None:
         if not new:
             return
 
-        header = format_header(len(new), datetime.now(timezone.utc))
+        header = format_header(len(new), now)
         for chat_id in subscriber_ids:
             if await send_to(bot, chat_id, header) is SendResult.BLOCKED:
                 blocked.add(chat_id)

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 
 import pytest
@@ -55,3 +56,49 @@ def test_entry_without_link_is_skipped():
       <entry><updated>2026-07-16T15:00:00Z</updated></entry>
     </feed>"""
     assert parse_feed_page(data) == []
+
+
+# -- finding 6: a page-wide skip must be distinguishable from end-of-pagination --
+
+
+def test_page_where_every_entry_is_unparseable_logs_a_warning(caplog):
+    data = b"""<?xml version="1.0"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <updated>not-a-date</updated>
+        <link href="https://lore.kernel.org/linux-input/bad1@example.com/"/>
+      </entry>
+      <entry>
+        <updated>also-not-a-date</updated>
+        <link href="https://lore.kernel.org/linux-input/bad2@example.com/"/>
+      </entry>
+    </feed>"""
+
+    with caplog.at_level(logging.WARNING):
+        entries = parse_feed_page(data)
+
+    # Return value and control flow are unchanged: still just [].
+    assert entries == []
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings, "a page-wide parse wipeout must log a WARNING"
+    assert "2" in warnings[0].getMessage()
+
+
+def test_page_with_a_mix_of_good_and_bad_entries_does_not_warn(caplog):
+    data = b"""<?xml version="1.0"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <updated>not-a-date</updated>
+        <link href="https://lore.kernel.org/linux-input/bad@example.com/"/>
+      </entry>
+      <entry>
+        <updated>2026-07-16T15:00:00Z</updated>
+        <link href="https://lore.kernel.org/linux-input/good@example.com/"/>
+      </entry>
+    </feed>"""
+
+    with caplog.at_level(logging.WARNING):
+        entries = parse_feed_page(data)
+
+    assert [e.entry_id for e in entries] == ["good@example.com"]
+    assert not any(r.levelno == logging.WARNING for r in caplog.records)

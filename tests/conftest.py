@@ -105,7 +105,10 @@ class FakeMessage:
 class FakeQuery:
     def __init__(self, data, chat_id):
         self.data = data
-        self.message = SimpleNamespace(chat_id=chat_id)
+        # Only .chat.id is exposed — not .chat_id — matching the surface
+        # common to both telegram.Message and telegram.InaccessibleMessage
+        # (the latter has no .chat_id). See kernel_lore_bot/delivery/handlers.py.
+        self.message = SimpleNamespace(chat=SimpleNamespace(id=chat_id))
         self.answered = False
         self.answer_text: str | None = None
         self.markups: list = []

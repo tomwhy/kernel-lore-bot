@@ -51,7 +51,7 @@ def decode_header_value(raw: str) -> str:
     )
 
 
-def parse_message(msg: Message) -> Optional[Entry]:
+def parse_message(msg: Message, base_url: str = LORE_BASE_URL) -> Optional[Entry]:
     """Convert one mbox message into an Entry, or None if it is unusable."""
     try:
         msgid = (msg["Message-ID"] or "").strip().strip("<>")
@@ -80,7 +80,7 @@ def parse_message(msg: Message) -> Optional[Entry]:
         return Entry(
             id=msgid,
             title=title,
-            url=f"{LORE_BASE_URL}/all/{msgid}",
+            url=f"{base_url}/all/{msgid}",
             author=author,
             updated=updated,
             reply=Reply(ref=in_reply_to) if in_reply_to else None,
@@ -148,7 +148,13 @@ def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Threa
     return Thread(roots=tuple(root_nodes), mailing_list=mailing_list)
 
 
-def parse_thread(mbox_text: str, mailing_list: str = "") -> Optional[Thread]:
+def parse_thread(
+    mbox_text: str, mailing_list: str = "", base_url: str = LORE_BASE_URL
+) -> Optional[Thread]:
     """Parse a whole mbox into a Thread, or None if nothing usable is present."""
-    entries = [e for e in map(parse_message, iter_messages(mbox_text)) if e is not None]
+    entries = [
+        e
+        for e in (parse_message(msg, base_url) for msg in iter_messages(mbox_text))
+        if e is not None
+    ]
     return build_thread(entries, mailing_list)

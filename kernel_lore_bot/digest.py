@@ -20,7 +20,7 @@ def count_entries_since(thread: Thread, cutoff: datetime) -> int:
 
 
 def classify(threads: Iterable[Thread], cutoff: datetime) -> list[Classified]:
-    """Pair each thread with its status, newest and newest-first."""
+    """Pair each thread with its status, new first, then newest first."""
     classified = [
         Classified(
             thread=t,

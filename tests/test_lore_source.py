@@ -272,6 +272,23 @@ def test_pagination_terminates_when_server_repeats_the_same_page(conftest_fake_c
     assert len(feed_calls) <= 3
 
 
+def test_entry_url_follows_a_custom_base_url(conftest_fake_client):
+    # Finding 4: pointing LoreSource at a mirror must not leave Entry.url
+    # hardcoded to lore.kernel.org — every "View thread" link would point at
+    # the wrong host otherwise.
+    mirror = "https://mirror.example.com"
+    mirror_feed = f"{mirror}/linux-input/new.atom"
+    client = conftest_fake_client(
+        {
+            mirror_feed: [_feed(("a@x.com", "2026-07-16T15:00:00Z")), _feed()],
+            f"{mirror}/all/a@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("a@x.com"))],
+        }
+    )
+    source = LoreSource(client=client, mailing_lists=("linux-input",), base_url=mirror)
+    threads = list(source.fetch_threads(SINCE))
+    assert threads[0].roots[0].entry.url == f"{mirror}/all/a@x.com"
+
+
 def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
     # DEFECT 11: a cut connection yields a truncated gzip. gzip.decompress raises
     # EOFError, which is neither BadGzipFile nor OSError, so the old

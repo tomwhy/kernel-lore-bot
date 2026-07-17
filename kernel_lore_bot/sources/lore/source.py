@@ -139,7 +139,9 @@ class LoreSource:
             log.warning("Corrupted/truncated gzip mbox at %s: %s", url, exc)
             return None
 
-        thread = mbox_parser.parse_thread(raw.decode("utf-8", errors="replace"), list_name)
+        thread = mbox_parser.parse_thread(
+            raw.decode("utf-8", errors="replace"), list_name, base_url=self.base_url
+        )
         if thread is None:
             log.debug("No usable messages in mbox at %s", url)
         return thread
