@@ -121,9 +121,12 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Tests never hit the network or the real filesystem: `FakeHttpClient` serves the
-checked-in fixtures in `tests/fixtures/lore/`, and `InMemoryStore` replaces
-`JsonStore`. Both are in `tests/conftest.py`.
+No test makes a real network call: `FakeHttpClient` (in `tests/conftest.py`)
+serves the checked-in fixtures from `tests/fixtures/lore/`. Most tests also stay
+off disk by using `InMemoryStore` (`kernel_lore_bot/storage/memory.py`) in place
+of `JsonStore`. The exception is `JsonStore`'s own tests, which use pytest's
+`tmp_path`: the file format, the atomic write, and the legacy migration are the
+things under test, so they need a real directory — never your actual state.
 
 ## Docker
 
