@@ -78,8 +78,61 @@ def test_build_thread_promotes_orphan_replies_to_roots():
 
     thread = mbox.build_thread([entry("root"), entry("stray", ref="not-here")])
     assert {r.entry.id for r in thread.roots} == {"root", "stray"}
-    assert len(list(thread.walk())) == 2  # neither message is lost
+    # Both entries appear somewhere in the tree; this fixture happens to put
+    # each in its own root, but that is not guaranteed in general (see
+    # DEFECT 15 below for shapes where an orphaned reply is nested instead).
+    assert len(list(thread.walk())) == 2
 
 
 def test_build_thread_returns_none_for_no_entries():
     assert mbox.build_thread([]) is None
+
+
+def test_build_thread_reaches_disconnected_cycle_alongside_a_real_root():
+    # DEFECT 15 fix: the old root rule only checked whether an entry's own
+    # In-Reply-To resolved *outside* the mbox. A disconnected pair of entries
+    # that reply to each other (refs resolve, but only within the pair, and
+    # never back to the real root) was neither a root nor reachable from one,
+    # so it vanished from the tree silently.
+    from datetime import datetime, timezone
+
+    from kernel_lore_bot.models import Entry, Reply
+
+    def entry(msg_id, ref=None):
+        return Entry(
+            id=msg_id,
+            title=msg_id,
+            url="u",
+            author="a",
+            updated=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            reply=Reply(ref=ref) if ref else None,
+        )
+
+    thread = mbox.build_thread([entry("A"), entry("D", ref="E"), entry("E", ref="D")])
+    assert len(list(thread.walk())) == 3
+    ids = {n.entry.id for n in thread.walk()}
+    assert ids == {"A", "D", "E"}
+
+
+def test_build_thread_on_pure_cycle_does_not_recurse_forever():
+    # DEFECT 15 fix: when every entry is part of a reference cycle, there is
+    # no real root at all. The old code fell back to `entries[0]` and then
+    # recursed into the cycle without ever stopping, raising RecursionError.
+    from datetime import datetime, timezone
+
+    from kernel_lore_bot.models import Entry, Reply
+
+    def entry(msg_id, ref=None):
+        return Entry(
+            id=msg_id,
+            title=msg_id,
+            url="u",
+            author="a",
+            updated=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            reply=Reply(ref=ref) if ref else None,
+        )
+
+    thread = mbox.build_thread([entry("D", ref="E"), entry("E", ref="D")])
+    assert thread is not None
+    ids = {n.entry.id for n in thread.walk()}
+    assert ids == {"D", "E"}

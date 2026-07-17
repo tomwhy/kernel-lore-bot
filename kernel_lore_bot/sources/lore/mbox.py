@@ -87,9 +87,16 @@ def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Threa
     """
     Assemble entries into a thread tree.
 
-    A reply whose In-Reply-To does not resolve inside this mbox is promoted to a
-    root rather than dropped. More than one root signals a split thread and is
-    kept as-is.
+    The tree is built by walking outward from the real roots — entries that
+    are not replies, whose In-Reply-To does not resolve inside this mbox, or
+    whose In-Reply-To points at themselves — while tracking which entries have
+    already been reached. Any entry never reached this way is promoted to a
+    root too, in document order. This covers two cases that a simple "no
+    parent in this mbox" root rule misses: a disconnected subgraph whose refs
+    only resolve among themselves (it would otherwise vanish from the tree
+    entirely), and a pure reference cycle with no real root at all (it would
+    otherwise recurse forever). More than one real root signals a split
+    thread and is kept as-is.
     """
     if not entries:
         return None
@@ -98,22 +105,40 @@ def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Threa
     children_map: dict[str, list[Entry]] = {e.id: [] for e in entries}
 
     for entry in entries:
-        if entry.is_reply and entry.reply.ref in children_map:
-            children_map[entry.reply.ref].append(entry)
+        if entry.is_reply:
+            ref = entry.reply.ref
+            if ref in by_id and ref != entry.id:
+                children_map[ref].append(entry)
 
-    roots = [e for e in entries if not e.is_reply or e.reply.ref not in by_id]
-    if not roots:
-        # Every message replies to another in a cycle; fall back to the first.
-        roots = [entries[0]]
-        log.debug("No root found in thread — using first message as root")
-    elif len(roots) > 1:
-        log.debug("%d roots found — grouping under a single Thread", len(roots))
+    def is_real_root(e: Entry) -> bool:
+        return not e.is_reply or e.reply.ref not in by_id or e.reply.ref == e.id
+
+    visited: set[str] = set()
 
     def _build(entry: Entry) -> Node:
+        visited.add(entry.id)
         kids = sorted(children_map.get(entry.id, []), key=lambda e: e.updated)
-        return Node(entry=entry, children=tuple(_build(k) for k in kids))
+        return Node(
+            entry=entry,
+            children=tuple(_build(k) for k in kids if k.id not in visited),
+        )
 
-    return Thread(roots=tuple(_build(r) for r in roots), mailing_list=mailing_list)
+    roots = [e for e in entries if is_real_root(e)]
+    if len(roots) > 1:
+        log.debug("%d roots found — grouping under a single Thread", len(roots))
+
+    root_nodes = [_build(r) for r in roots]
+
+    # Anything not reached from a real root is its own disconnected piece — a
+    # subgraph whose refs resolve only within itself, or a pure cycle.
+    # Promote it too, in document order, instead of dropping it or recursing
+    # forever looking for a parent that doesn't exist.
+    for e in entries:
+        if e.id not in visited:
+            log.debug("Entry %s unreachable from any root — promoting to root", e.id)
+            root_nodes.append(_build(e))
+
+    return Thread(roots=tuple(root_nodes), mailing_list=mailing_list)
 
 
 def parse_thread(mbox_text: str, mailing_list: str = "") -> Optional[Thread]:
