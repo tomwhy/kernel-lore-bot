@@ -20,7 +20,7 @@
 - **New package name:** `kernel_lore_bot/`. Old top-level modules (`bot.py`, `scraper.py`, `config.py`, `follows.py`, `subscribers.py`, `main.py`) stay in place until Task 14 deletes them.
 - **No new runtime dependencies.** Test-only deps go in `requirements-dev.txt`.
 - **Preserve exactly:** message wording/layout, command semantics, scrape schedule.
-- **Intentional changes only:** the 8 defects listed in the spec + Task 5 (empty-mbox crash).
+- **Intentional changes only:** the 14 defects listed in the spec. Each task names the defects it fixes; do not "improve" anything else you notice — report it instead.
 - **Every task ends green:** `.venv\Scripts\python.exe -m pytest` passes before commit.
 
 ---

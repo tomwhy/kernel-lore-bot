@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>linux-input.vger.kernel.org archive mirror</title>
+  <entry>
+    <author><name>Alice Adams</name><email>alice@example.com</email></author>
+    <title>[PATCH] older still</title>
+    <updated>2026-07-16T10:00:00Z</updated>
+    <link href="https://lore.kernel.org/linux-input/older-1@example.com/"/>
+    <id>urn:uuid:aaaaaaaa-0000-0000-0000-000000000001</id>
+  </entry>
+  <entry>
+    <author><name>Bob Brown</name><email>bob@example.com</email></author>
+    <title>[PATCH] way past the cutoff</title>
+    <updated>2026-07-01T09:00:00Z</updated>
+    <link href="https://lore.kernel.org/linux-input/ancient-1@example.com/"/>
+    <id>urn:uuid:aaaaaaaa-0000-0000-0000-000000000002</id>
+  </entry>
+</feed>

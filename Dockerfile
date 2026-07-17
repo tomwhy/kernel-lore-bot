@@ -10,5 +10,6 @@ COPY . .
 # State file lives in a volume so it survives container restarts
 VOLUME ["/app/data"]
 ENV KERNEL_BOT_STATE_DIR=/app/data
+ENV PYTHONIOENCODING=utf-8
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "kernel_lore_bot"]

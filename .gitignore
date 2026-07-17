@@ -3,6 +3,8 @@ secrets/
 .env
 seen_threads.json
 data/
+state.json
 __pycache__/
 *.pyc
 .venv/
+.superpowers/

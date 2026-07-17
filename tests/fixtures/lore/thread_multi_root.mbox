@@ -1,0 +1,15 @@
+From mboxrd@z Thu Jan  1 00:00:00 1970
+From: Alice Adams <alice@example.com>
+Subject: [PATCH] first root
+Date: Mon, 15 Jun 2026 10:00:00 +0000
+Message-ID: <root-a@example.com>
+
+First root body.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+From: Bob Brown <bob@example.com>
+Subject: [PATCH] second root
+Date: Mon, 15 Jun 2026 11:00:00 +0000
+Message-ID: <root-b@example.com>
+
+Second root body.

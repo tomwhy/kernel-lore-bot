@@ -1,0 +1,1139 @@
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f43.google.com (mail-wm1-f43.google.com [209.85.128.43])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 0685B2727F3
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:16:53 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.43
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029815; cv=none; b=SIZHXzTXdkuCEA5yFtF2rm+1W2veXTGAasv798y4Y7PV1OCj98dRIRY8amaiLME9p35ZNoqDKCdh81eps/TOD1N5rMQDmUCIsePfd9c3ueA2lPlhPUAbrBJmm8RmfjF756ZkN5hVgUSu0v2NZF4hXwDvPFMPxlAA4RNA7QmBe4w=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029815; c=relaxed/simple;
+	bh=mm9/6qnPZ0Z6edR40uEiZkQ551sUHUOzqcsCjUcuak4=;
+	h=From:To:Cc:Subject:Date:Message-ID:MIME-Version; b=LP252I29fEMmwyHO1Qv3BJypjlXczkIvWWokvjUtrmfXlmg1hEPSEqAlwiQrgFlufIo8gkmkfQAEmPcrfzH9g7xQVdWDFDap5UZW7ZjtMR4ZcimX52G7xuGEs63XPwEUUjQz1vGv9d7ygp85d8MpN876mGsL4ley3VOENKZrqwo=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=R1x84vdm; arc=none smtp.client-ip=209.85.128.43
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="R1x84vdm"
+Received: by mail-wm1-f43.google.com with SMTP id 5b1f17b1804b1-490bc6a7958so32971825e9.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:16:53 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029812; x=1782634612; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:message-id:date:subject:cc
+         :to:from:from:to:cc:subject:date:message-id:reply-to;
+        bh=J0do6nWQen4Q8AfnwI9dVctfBuX6Xn6Ib8Ug5wHHiVE=;
+        b=R1x84vdmLoGCKFo9MxlJaAu6wXQoL/mOe2n7iz5BOKD9ExdzkEIED5CP9FmXkdTrK8
+         3UQykcgpaBFhnHe4o6202G6VSLIFb7p1+MoHO+/1DK4pYk8BjsXSru/bGMn9fYfGpyqJ
+         BfMwNUEQ37Wq0ubyGFe9fo4I3sTmh1XfgHIn438RDcW+O2Ng5OzRlsXqGWc7RO+Zt80n
+         mwxl9rXHs5SPTV0lboHdG1/28//F6olBl0Grl9Ud1qciswBfEl4T+4me2Q8ceVhzBkN+
+         GZlXU/PI4ZeLN7X5tsC5T2MhZ3sEGSYA46go30z7GOw0k75k1QNhWSYCWmww71zPSwMn
+         /wNQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029812; x=1782634612;
+        h=content-transfer-encoding:mime-version:message-id:date:subject:cc
+         :to:from:x-gm-gg:x-gm-message-state:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=J0do6nWQen4Q8AfnwI9dVctfBuX6Xn6Ib8Ug5wHHiVE=;
+        b=gxQeFuEaiBS1XB6TQfTZdz8ExTmWJvecYLw2KnZlhhj/kC2EyQD5mwUzEyCRWp0wmx
+         qEzlbIcocOEwoBGLVeeNH8PM6f5t8lRA+k3zDJw3Yd//1Ow96ZPHd4G9M6q1autms193
+         uNBxWp+tJ3TqK/S7rf8mQEiC1d3O5JELQImxzXDjj7EMOeWy4+2VeFVim5GKHo/wW2rg
+         qTIxqK1/k0pin0n/JOYNp+7PsTmUP4Mr8ICGaIAgiCvfNPitfe5iSaTg8ASm2ycYQZmg
+         RPJQlLFhFfi5TqhPLUKB+j8XLOlYIXgXZk25eiLEWEBRcnykQozz5Qt/87UfWvH9TnQU
+         gwnQ==
+X-Forwarded-Encrypted: i=1; AFNElJ8ESs4giuMdY2Mux43xe8EzltLOPwD4STaLIvct7VWFzf9EXcaNsBd9Bm5rAebc8eWNbaTpnqM6+bML9w==@vger.kernel.org
+X-Gm-Message-State: AOJu0YxXwrybr85jqLjm5yXToJO8lMWZlypI/Fh66j0gc6Kn8goRxzXa
+	8hPofLEq5vVpw56UdC9ONcIKVtO59x/6nG9ddOwiwFJtSDtdaOL+F6C5
+X-Gm-Gg: AfdE7cnYfADLw8A3p75Xrf2SQmfADfRYBkUvhr11RU03c28rfXfUyhsqkrYGNruYSuF
+	kRmuIv2YBSDAL+SiE2XqNusyosZsio/IQNHkTna4Z1ZGPPV5Sp9POhrsNdqvJMQWeg8GPm0rJPR
+	SNQxTzKNk2tM/UTXmtObhLUxAq4Jf7Z+iujhzO0vAe/jYPHf4Vr8D4IQjiQWSjPsfV0FUDkpdPD
+	z383pMyEMh20idr9W+HIpikRzf8v3cb4i835pGQWztjwB/QutAOaA8FyApAYPGc0t1zSnYyoSCx
+	OU88qITi7rxHSratzZ1qR1695DCfRx4PajpHrnmOcZP8vTKihr/uq0RPSRI4/eZMhkZhNqZoouL
+	jjGhyUmZRZwJVRUinXM8yIpR23eRP2/fbxsMTVq2mntEvUJhwwW89dvvrUyrza4miwp+Kj9R6l0
+	zJXJngeYV09mSNIRVU
+X-Received: by 2002:a05:600c:1f8c:b0:492:4889:3d18 with SMTP id 5b1f17b1804b1-49248893e53mr82283635e9.9.1782029812062;
+        Sun, 21 Jun 2026 01:16:52 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.16.49
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:16:50 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Val Packett <val@packett.cool>,
+	Julien Massot <julien.massot@collabora.com>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 0/9] Add support for MT6392 PMIC
+Date: Sun, 21 Jun 2026 10:13:25 +0200
+Message-ID: <20260621081634.467858-1-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+The MediaTek MT6392 PMIC is usually found on devices powered by
+the MT8516/MT8167 SoC and is yet another MT6323/MT6397 variant.
+
+This series is mostly based around patches submitted a couple
+years ago by Fabien Parent and not merged and from Val Packett's
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f51.google.com (mail-wm1-f51.google.com [209.85.128.51])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id ADA6B2641FC
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:17:08 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.51
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029830; cv=none; b=tbGIzVhWxK36WZxibKmIpv6Cg4in3KRqfIDzGhneEqHAjS27Ux7wrDrC8x9S2SaLIbLpCIFqRZq0d7EwKjvwQrUkyHhIpKAeoDZEREBe/E4p4trcNRE22qUOPFKbA4Yxeb9lPKWB+/WfAsHr1ZldnxyAW7yW3ApsKOD5Qv2o3vc=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029830; c=relaxed/simple;
+	bh=sTYWyhrbRxDuU248Vbf8GOxIJr3Ex6NE3P/1VQewdNk=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=uRoBp4CFv0MLlD50Mh2WwEAt/o36iQghSQiGTS9cZLx1prVua5Z6KsCz7UinMP/G4rBx7zgHNfaIZ+DGHjBN8VMBxiGlrV7D32kbEw5ADao5JJj9nNkf4CdlTHEs5t4fve9hVKDtpWTCMGEOX/nH+BA1xfa9B+KXLpyRleOve0w=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=QSQkeJZG; arc=none smtp.client-ip=209.85.128.51
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="QSQkeJZG"
+Received: by mail-wm1-f51.google.com with SMTP id 5b1f17b1804b1-490b3637b90so25448485e9.3
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:17:08 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029827; x=1782634627; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=6FtRNx41kTzSfvca25trEUrc2fj2TZslpJ/VXb0q1qg=;
+        b=QSQkeJZGYd2PUVx6OhB0gS7PhoM/ID7JC+FWnjACDIs4qibPsqlpcT0CNI2JK/86u3
+         rCTvsw4jvpON3qJUwZ+UGXpQ9or3l79yD23knsx6XVeUuahA0+Y2qBMG/1zo2wqzodju
+         U/a2x3fHU7GrkwttrfLWXTsJAf9SWpaD1gaMVp1DjAgpkl6SIW4ZbIF+4XefZDgQCn21
+         xAwydbrOmiB04KYVwbnXsEB3bXNVWqj7iiKRyV+jdcPIB6BgQXJ7FYfHGYLK4f0BX5At
+         S3VPLOisDlu4knB820Xx7Pi/ecwsCZPUZdPWQ/NZoOWPBSC56nqpqHEuk9INBOImdmpk
+         F0fQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029827; x=1782634627;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=6FtRNx41kTzSfvca25trEUrc2fj2TZslpJ/VXb0q1qg=;
+        b=BTXtTIlPgEXzee2NaTJzY/3hPq2DW6EcvgVxVdJKqAlChM41Ps3OYNE9F5MoYTC0QL
+         A5D1QibtWGs06DjMG3IHzHudDUzhlercyn3/JxvisZUrwBsST18x8KGCyMU7VfIF1QWE
+         +diuWV762EKKa3kXLjEeio38kuKzvErmtCsE1X8x11LhXR1R8twA04cbIvHUYEtAv37o
+         TZ4ctqJuRdzv3maYuDQzWP4aHpg/fH9WFeh/462i5+cdv+d+54TDxpUaItYPXdVw9WKp
+         tzcVci8TXOwXK/WLC9mnNgKj+7+694Qu/OKWE7GMkFYhDfHXUchZ2tXqaDYW10F4LIJO
+         cQEQ==
+X-Forwarded-Encrypted: i=1; AFNElJ+E9abI4JpKBwDtx9vnRtLOQzFZZeahLZIy59W/MEsUbPwEaeJ4zRvqel43BVldRscHwffCzas5v0sl6Q==@vger.kernel.org
+X-Gm-Message-State: AOJu0YyNlduQPXPFqlEIHN96Yo6/b+qMd6bhJlQ9EwL8TcRI8o1STSF+
+	AdM+mUMOndahXlJrMdSskiXMNmXLgOe7JXfc1eq1d8toiUBcTm8xErLp
+X-Gm-Gg: AfdE7clx9jfxRXawkLPaSbd3g45x+j5ts2G138WzxA9X3yv5454g0L1ZLH+txSAta/z
+	dFwSzTvNvc8NlmPN5ZlANBJltiFWYzw5zgp8CtCPnY2bc8aEcvWE+L2QjjOr6Sq1skFxTMxMtO9
+	ptqVsVGBlyzrrD4GFKQbn+01FFapI3uWTRjIWHHtRXJUaCu0RGyW7l58ZPXCvcwH+06gf26DdgR
+	4mvxY8xSY075OGvcbPHToE8njh0+lXLJSuRb6OK5fDRHbr32RJQNXudgjmehRjXf4R1s2k5GZml
+	mz/bxEZH40CcACul/SZ5DPYNfVxbKTpIIdPQ/myxIii6QDnKiGMtIxkmeoTUj43bQmYWvu21b5j
+	iQEaBTQvWWfX9P/cGpvo/HjxiTKjfY06kWMoyMXBkORu8rRsYnmp9cK9JbbCZN06cVSC5aNPzkU
+	IzB2t8pA==
+X-Received: by 2002:a05:600c:468c:b0:492:3c7e:57aa with SMTP id 5b1f17b1804b1-4923eeb494emr165616195e9.0.1782029826761;
+        Sun, 21 Jun 2026 01:17:06 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.17.03
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:17:05 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Val Packett <val@packett.cool>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Julien Massot <julien.massot@collabora.com>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 1/9] dt-bindings: mfd: mt6397: Add MT6392 PMIC
+Date: Sun, 21 Jun 2026 10:13:26 +0200
+Message-ID: <20260621081634.467858-2-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+Describe the MT6392 PMIC and its RTC and regulator devices. This device
+is mostly based on MT6323 with some similarities to MT6397 and is usually
+found on boards using the MT8516/MT8167 SoC.
+
+Signed-off-by: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f49.google.com (mail-wm1-f49.google.com [209.85.128.49])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 4F46727A47F
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:17:22 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.49
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029843; cv=none; b=sxer0BjNV6lPjgnL2aREs2uQ+N5vG4t4f/rFbmfqLLQPGIGUpoLcc6EoNBi738h1f+Yuj3nVD3TUet5a7sxRj4Mgoaavr4zGvZXZtWIlB2kbhQb1OCC8jrJc595OEsXDAYZ3afivyYr4OTkU3GioiJAYDSf0qwhwA63N3TBEbL8=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029843; c=relaxed/simple;
+	bh=UGIM3aTui+shPbVvhLT3b5f6OpTvEv4JPJold/DY6lA=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=nRowrrs2UcOEGbK3AtkatDOvk/vXbAsbu64EVW/xnj6+NxFVQ+oB0bnyY4w8Dns1VXfns6/GXoi7iywnttT/bZygMlfAbv5WQyAUdBJVIFyWcgSZiRj/c+xxvjIQA+14yYW3pgATUXag9iIJIm4O6zTJDCKXlsEyhmUZqiah8Wc=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=dbyXZtWB; arc=none smtp.client-ip=209.85.128.49
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="dbyXZtWB"
+Received: by mail-wm1-f49.google.com with SMTP id 5b1f17b1804b1-49230a567a9so15720665e9.0
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:17:22 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029841; x=1782634641; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=bt6uMG9PgUYc/XVv1n4ledEppWz4qm8tk4GY6vs/fFQ=;
+        b=dbyXZtWBNRHT+OgstRcFJ3dvfYdKvLxQlxqWJgch6ivGYs/N37G7ZFMoBt7Glg+tQY
+         GD/3vVUvShCeY3TsYHxpyZhrJ/j64DsZLJ22uS8IPJA0cSZ4KrST4PMMzFi4pdQpCgn7
+         Jo/bFBR7ATKZQwnl3dhiaNLK1lnLXU4+Lmd8BkL065B+CMMgRU1Uv97mFX2+vC6utVVA
+         PShYw3/Uf1xWEhHneUGV2+g+ZbFHm/knuLSoKhZnebmQZFMY+Of1XFy2rGx5SAhtKwIx
+         bqr8Bso7QPYoUTrtVddxlSTmDocICzbBWxJpQ0xCICkPhrx0KRH3Ee0hFBFprmaG5/RR
+         /uow==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029841; x=1782634641;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=bt6uMG9PgUYc/XVv1n4ledEppWz4qm8tk4GY6vs/fFQ=;
+        b=f2B+8pfsl7GndDEIVSH4LqRcz74PfGZZQdmVuw6b5+GwHXESWERAeEMe5IWfSKEne6
+         A3d1Ggt+AVg4T2o1ggdVnDW0i9dHU79jQxRl0E7y6yDXGcEs3ApNghcUPmPsrXN2m8Hg
+         fvYye2vFkokCE/JouhcO9O7gq1y1jkJYHIN0h+jBuqE+HoO2/5aIPsgclxz1eUlv6V1S
+         J5+SrkKyNgzpLM7uCsIefcqCfzZWUJ4Do1ZuPvWdskLR8lXSUEj+I+O1wx1sb3i1M9YO
+         WQQ1EtfsXEQ2saKX07YxLj6wv+FrLLTrDE1ne01HhNt6Gl/BQacD/4QB36g68owOlWef
+         ZGYw==
+X-Forwarded-Encrypted: i=1; AFNElJ+EiYrOFIVOVk2mQtjsK/XbPshELhDGjs8VM4yuxc+QPArbUej6PF3DFaVb+QZk+VqNtQ1DM6CaMlz2UQ==@vger.kernel.org
+X-Gm-Message-State: AOJu0Yw7ajnLZBN0JN/ZBLpwJNLorswscC0RWjWOpr1TlER1WJSDNwEH
+	G/KkVe/+7GIwEb+3x2imF0rqzBo9X61Ew/JqIzvuOtBYmUPLiixINP/4
+X-Gm-Gg: AfdE7cm//Jvi59U9Fy0c+4JAIHLzHkpeOphPs1UgbGhFJjt9+O1RpTEOcBFznxIT4Jd
+	2YD6nlGBvnEHxQCeQEuAaNqv1mlAdvidJyhjBmaJgdy7HERqhXBvpIM4N9ehc2jTf5aAqYJjF8p
+	Pd6VJwlhodJtcJzjibs9ZsWfXq5mMXXmCXH3fuT0Nno5IJqQ9nh8gVkITxhaaWhBjuYq7sPdFi9
+	w3RKvvL0stZ/jqgSxq69McTFrJUz7roYfF6vdksnN1+DEGi40DXVPRzBmWg5egNak3sS2YS3egM
+	kJ6YNjFAv26w7TN+uVIGwhNEnWxtEDClEOvK8B7AIzAyyHRHhGEJwzPiqKx1Bx/tzomHAg+lLtW
+	U+ctw+MCtzPJAkqKVN7ysYVWQt+1OZShsA3w2s/vjAF50i4RDOVsASb4imezWUSMPRtcLLcITvd
+	vlrZzdEw==
+X-Received: by 2002:a05:600c:5289:b0:490:3d62:f5e1 with SMTP id 5b1f17b1804b1-49240e81ac2mr164933815e9.22.1782029840525;
+        Sun, 21 Jun 2026 01:17:20 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.17.18
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:17:19 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Fabien Parent <parent.f@gmail.com>,
+	Val Packett <val@packett.cool>,
+	Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Julien Massot <julien.massot@collabora.com>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 2/9] dt-bindings: input: mtk-pmic-keys: Add MT6392 PMIC keys
+Date: Sun, 21 Jun 2026 10:13:27 +0200
+Message-ID: <20260621081634.467858-3-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+From: Fabien Parent <parent.f@gmail.com>
+
+Add the binding documentation of mtk-pmic-keys for the MT6392 PMIC.
+
+Signed-off-by: Fabien Parent <parent.f@gmail.com>
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f50.google.com (mail-wm1-f50.google.com [209.85.128.50])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 871B0273D6D
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:17:36 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.50
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029857; cv=none; b=lUQQW0d5OTL3sUPLAQAv81kXgvLfGQQA888gBZcVwnGQbcE2AZlHQa4ezIBkwpq8/GMNaSP7DwoRTrEsWyvdfJYLLowmTeTASYoD+lKi8E1inY4DWv44D7/+RErINf0O7VRnfrfI9GtywDrXzcrfBIQ0QNNkPDSm9NVLZJemiJc=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029857; c=relaxed/simple;
+	bh=F1QcPOat0RlFGGRV77vX76GE3Dt2kaecn3iVPXEQx1Y=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=czeGAXW3OODll84EvuOc8Jm0muaSkJsYlmGMHdesweIFs9g0Qkn11ISyEs74O05ry4uNN9w7m61RfY5Lt4KOJvLtqVXKC66t3qXsbDEyzq2hjtRyJMWBJw0n136/vKLMDdUsvbVGddKlrNURcgtDCD1xk9l5ekuk5SJIylt7OWY=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=SV8xpK6r; arc=none smtp.client-ip=209.85.128.50
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="SV8xpK6r"
+Received: by mail-wm1-f50.google.com with SMTP id 5b1f17b1804b1-490b1bbcf3aso21587085e9.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:17:36 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029855; x=1782634655; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=cr3pdjQhJUwUIpy3MtQLNp8w7Jmlbm2OlpXRHc3g1wU=;
+        b=SV8xpK6rcliFYMNL1/dsunswNzQjAqMWqlS/ICaJ725GNJ7VnRBol8RMm1p/6sFlhH
+         9dCPi1dlYmP/bX7M20TUNJmzAG7Z7fFKZsKSuuXLmM4344twB8yDVgNymG05MAi6WpNu
+         +LmMYq3c1DGd8GB485TFjhp/AAxXGoHUA+KfaRolNxYDnlUD4HBY+Awjm6q37orlpyps
+         qrf5qG9xNCiSTxQa1/vQ8VpHYxnylASWsDlWqrEjNXE2t1HfPkanWPN5q3OL5yu3vbZQ
+         q0Pk3goVr4E+eQOA9jel94CX+sayn4YmLH8m6wKKTrvzBSLOuNxsiZ1ENqb01It4fWkU
+         aj/g==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029855; x=1782634655;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=cr3pdjQhJUwUIpy3MtQLNp8w7Jmlbm2OlpXRHc3g1wU=;
+        b=Tap1nu0+u1ospAwNTePoktgNj7h8HSbb0emzKFbXLA8ZY4dm4Y24S9No1BUu/FNeIH
+         s++GYFFizt5UM2dl7vgYJhZEXfsPzaIvDXrs16F5As6WOEif+zZ4R0mCraPWd1B+lFqg
+         cbd3NGzRvxDDRMoixp/Y9aN5ZHFrhZ/mBqvMKgWlXx5yFm0Ey0F4qgubP/cQv+xsbJrz
+         bQ10USbfug/+k5KvnFKLHkN8FeD88GxsBA5/1bD9kqkjS2fT4wG+c6VJzz4rNTvftVEg
+         AaveEeFibsGA2VvOtR1MuqDqTJAdFNxXOZbWdAiACy/J4WEbM7SoScO8QgO9TmSeSPm3
+         No9w==
+X-Forwarded-Encrypted: i=1; AFNElJ8xmF4srLKBtDX1aPdM+tc6nDcPEoAAXTHwpufxJro0ECSWLaTFDH2QnPDPlqjKZNzhEucL6yi9+ikFiw==@vger.kernel.org
+X-Gm-Message-State: AOJu0YzR8DInl6/FwylvPUbrFcVECR+AfJT8zyE0eZZ5Jy51JzzKnHKZ
+	VaOPwwgMAUVkMr4SWMJpvl2Nx/IfTGTS4FlJYANOCHYIiHo6NwkX9Mu8
+X-Gm-Gg: AfdE7cnRFT9+t7j5y3lLqgmwERiUfqfmxFy/lnyq6bsVc9UFR6yJ1PSB590B4efBq7C
+	zHoGrf5ptXmZe8YqVt4kUIVpYquA0rFuTjXjoL/6zaOFVpL6IZdX6l8BafLfz4A9fMIVfL4QFvx
+	l++LLFLeaervqJ1/oc5fJxG6eomdQwFyZ0NEl8TL1mJd756ly6G8oqoBdsvhet278HzH9DF+ciZ
+	TT+10vDpQT/mGTSvrsO1fbE/M0FMZ76Ofr4LO7xZhQFtpRcekMobgGOdlsHzzLhZpdluOI4+cJQ
+	vUM8n44BlqziYMX0cBtuz7+2VP0mj+Bb5ruCCA06z4C+xbM+/irpZ7UqBt6Sc+CMC/vt9GIi47R
+	tq+8EPxmAzbzw4+LChYkgsKDxABgmUDjGWgS3BJEOJbTy2hZFMs5IAC65wBqYzZ7ffkcGqNtrb7
+	rNZC+hEQ==
+X-Received: by 2002:a05:600c:8b4c:b0:490:be1e:6ce6 with SMTP id 5b1f17b1804b1-4924908ab39mr81863715e9.9.1782029854882;
+        Sun, 21 Jun 2026 01:17:34 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.17.31
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:17:33 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Julien Massot <julien.massot@collabora.com>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Val Packett <val@packett.cool>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 3/9] regulator: dt-bindings: Add MediaTek MT6392 PMIC
+Date: Sun, 21 Jun 2026 10:13:28 +0200
+Message-ID: <20260621081634.467858-4-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+Add bindings for the regulators found in the MediaTek MT6392 PMIC,
+usually found in board designs using the MediaTek MT8516/MT8167 SoCs.
+
+Signed-off-by: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+---
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f44.google.com (mail-wm1-f44.google.com [209.85.128.44])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id E18B4273D6D
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:17:50 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.44
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029872; cv=none; b=LlxPIlTy2f5qfh5AHnUkO2jnj/9Oi959HfwsXq/5+v3AjnuzI+eyWjOz6/ZCSIlDTfYbHNm/3QIGE8ARqZyE3E+Z8+oupSuKzUs+MibJB4ZBvzejMLxnmaRlvcl9oSQXnEvmoU+yVYi9Qr0GWyMTeqeGe7H+eoUXOGTVWZFfs8Y=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029872; c=relaxed/simple;
+	bh=wE5Q9Xg7USSAMSy5zl2zGIA6YjNggw0brQRJdx3w5Fg=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=dYgWcWEp6fWCo7ye1wsziLdrwWQ6Xp9LQcqLrg8WMXJAtJun/vOso9pW/Zu5KwuSEf8l2dpuLd9rpNZJSKiA7rDCHzIgZ+3u30qSKszMjs6Ht5TRWzvFjqM+L8V62X6wPKo6JTDPIqiXSAxtJ8qAiRVuzXLnlAuca8LPnbwfWJA=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=Oqrh0ZFm; arc=none smtp.client-ip=209.85.128.44
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="Oqrh0ZFm"
+Received: by mail-wm1-f44.google.com with SMTP id 5b1f17b1804b1-4908b92904fso46636195e9.0
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:17:50 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029869; x=1782634669; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=xcNf9P062CSvgzCfpV9k046WyE9GXOM/2prf3wJMe38=;
+        b=Oqrh0ZFmKm8uTxMHhQXrps9h1Rike4Yx1ESsJFIF0eT475YwXiOUjEze/6Ojq9vvsr
+         29yHfrhf9XmGU8voS5Oj/gDw3ztb/f3ypav2AqebQdH5X9D2Mv+Jusyvz/pe5eFxEPmF
+         OseiunqQiHlkoBBVhUJ+PxtlhbwnDl2WQVXQi18mjQSzQeGY1TVxqKrc083X+6BPnQUK
+         IZ+6HKYziI/qXvSWj7pYvL/+K1Q19v/FIuO/YHkysIzelX5EUpkNEl9A2JgsG3My4kD+
+         C9fHGfYLExGg74tTVt81CsXXcISVIFm+ZkF83pJXWx1RdRjAqtIeSSxXhHoxwz9aCndU
+         CDOg==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029869; x=1782634669;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=xcNf9P062CSvgzCfpV9k046WyE9GXOM/2prf3wJMe38=;
+        b=SDCYoGX/tJXHMl7EiziOvTAID0UUnI+eqBR/wJcCkbVKufbtWsDJizZGsfLjqe9pN7
+         lhQa3v+4TVLM5ncZozuT307Ntm56wQUZ1A6JFM2dG6QQuuBLUVKb9eXTngDIrO9P6NUD
+         /CNLrV4p4zJybPdXOp43gi6Dx9nb22UsT/O4d4Ykf5Te+l7eP6ZOrRk4YHxJoC50d4AN
+         YtbH4vAklGlcTEL5p6MR0f+FaJ0zomPXaW1pMn+k90T3YV2IbhYqr3wWzCZOziC+X020
+         c2H3YSn7fXX81Cym0+jmRlz+VoBlYPXPN/WcDs+jxjSQrNrP6atNayZciXG/0t0cG6YS
+         LQhw==
+X-Forwarded-Encrypted: i=1; AFNElJ97WD6wsHIl9boXsZ2yoQyMM9p8f3tF381/WiMQwwViijqNoM0C2Rsq/MVEOkEKFmW615ueKgmICIx/qg==@vger.kernel.org
+X-Gm-Message-State: AOJu0YyYIX2TkhEJeZ9qJCY3BG5sIfG6bXKoify8pX1BbZB71eINL2xh
+	4evMOD8WOxjrw2p1XVlVq74IbqoHtxTDA9HHdDXNWN0gZfbTO3GasXWH
+X-Gm-Gg: AfdE7cmxXVdzwKMIZWnmmRGhYBUVfA5haBnqowuBs92FOioJTdYqsNuqXEW50U+1HfA
+	0GzygN8f9I9ImK5nO6i+zh5jao5uhsifQxY6hoY/AslBSCi2CrvXa4mu7Rk8HjV3ndkxFIDhnyF
+	vxRJd9lUw5UWUzBB9R+Thum6kINio93agiNWke8VUd9LodYpRcte/bRVx3UqZq4xi7wVMtq1EZ2
+	q0yhDaTAltL9ZKK7If6b+RUfPnWnpVfTwk/oCJK+8F0xAG61V9eUeIaBpdK+93k2w5jqvKwVgOI
+	LaKQmnd8aAkQjfSR79D2Dx3WbFVP3WoWIdYj1zTDfzcHwUuo81M+gmgSODKgJQTIf8y12tTb6ep
+	IviZ4YISlOTCZWcr4CpRffD2MR+0OL/atIDbOnLDIjv3w+6uaEJR9ZA59jjc748NXj0MJFYSLSA
+	TcI0fOpQ==
+X-Received: by 2002:a05:600c:c4b7:b0:492:418b:b5e1 with SMTP id 5b1f17b1804b1-49242591d68mr123757305e9.37.1782029869163;
+        Sun, 21 Jun 2026 01:17:49 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.17.46
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:17:48 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Val Packett <val@packett.cool>,
+	Julien Massot <julien.massot@collabora.com>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 4/9] mfd: mt6397: Use MFD_CELL_* to describe sub-devices
+Date: Sun, 21 Jun 2026 10:13:29 +0200
+Message-ID: <20260621081634.467858-5-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+Use the MFD_CELL_* macros to describe sub-devices. No functional changes.
+
+Signed-off-by: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+---
+ drivers/mfd/mt6397-core.c | 197 ++++++++++++--------------------------
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wr1-f52.google.com (mail-wr1-f52.google.com [209.85.221.52])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 4946C27B4F7
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:18:05 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.221.52
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029887; cv=none; b=VKox8MQAILYhqVCD9K0FTCj/35BHSbbr+aJtTcyIQo5Kt5gwCbnvlAoXcTeCv2OYBvemjkSu0+0HTDORaCbdn58MVwVywD8QY0MlPpal/r+5KtdFzgYBDsyqnhfL3xEhMw8i/a6Qbgn0FBFZ7p7mf3vG0btwMaK1lQ2JbS/ajRQ=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029887; c=relaxed/simple;
+	bh=7z2mDKBt84YD4y+eWfJN6BqojHByJZU8bg/0GjtxUBA=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=qj5TBdCHBIkZroewTyNYXgxlmHppgqY99qk3UntJ43pyCBnfDPWU3jgIhEU0lwIuTbQhBsCLE1bgsBv6ecElSkaspEU32UoOcTaYvOwp2EziqcDulA9zJz+gEXLg/QBmknINNzzfdUsGQV8sv95KWgXNpqbpJ7d0t5T5MxlfwSk=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=m3ytP6NP; arc=none smtp.client-ip=209.85.221.52
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="m3ytP6NP"
+Received: by mail-wr1-f52.google.com with SMTP id ffacd0b85a97d-45ef779c1c2so2617737f8f.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:18:05 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029884; x=1782634684; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=UChc8HCxqs8liabJfpksiEoMEslWcv7lGPPHlLIrTvs=;
+        b=m3ytP6NPjw6qTv5p5QbymbSqxJqREPFBzA89+vkx8V3zs36oy2oHhLogCdOSeDhyV0
+         6mGwn/6T97/ap8bzkJ5tAcVErQWK5pYb/ScC+d3enTZXyIwGvpGwoXmDZgzZNODx+Rzo
+         YTFz9sK9QMgpIJivfLG/11QErLbQqs8uWOE7tiGa4sRS5xXw8stC7+ByzvqMIBnAAZIZ
+         gF9XrlzR8HnFHYvaL/Xn1uvU0fp5d4ZlvdIB4vXhmGURcRaD3H/uoqhzAj+7pI+l1scy
+         EPjdQXrza3ZhypQ/axwcU1fhLUF48hUwQdPs/8JuvBCX9+7Pn4Md9RPNqMdPIWsNB291
+         c/gw==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029884; x=1782634684;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=UChc8HCxqs8liabJfpksiEoMEslWcv7lGPPHlLIrTvs=;
+        b=R2/GXLz533KSCiT6hNHyIP8x8y0FEH/PRj6165MDcQaoD+3ZGkwFVEzTySNcKBiR2r
+         0fNDmlH+5RBrBe4JeLEe/TY7jTTO1A/QSwbNwj7Xjc6nJ7CAN1ma2+NVO+t7sN06T92Y
+         yfjRJhMQPdW4MEhIyFDHwBMjbWT5iVh8mVUCpJ6OHla8cShRezSrCpcvsh7n8qEMWNui
+         Zt34aFqc2IP4vLBqfj/l9ZwaUVwVXS5VIak6EPO9zJiKg+pRmN3QbfL9fduPMjzX0dBP
+         ywqHS5WddEUvvSdoDwi+nSfBHiHv8qyQNA4CvFoyWPpTYQLBuR4+422/uk1Vz65Z03lv
+         rl1A==
+X-Forwarded-Encrypted: i=1; AFNElJ++gILBf0CWgaJWgECW+TUz7JXuwr8rONuzSS7AR0oueMeLuWjAMOuwaxS8u6gqLohc6jYr50ssQK8buQ==@vger.kernel.org
+X-Gm-Message-State: AOJu0YzaXkty3CegaaWQUU5zFxkXUElwXXKsTVzaa0AkFNWHK4HUtBva
+	X+VjmgoT9u1trJQ64BSVxbgz5HTBXqRUQKQTgsQEsIUNWIMbY86zXcJ6
+X-Gm-Gg: AfdE7cmttvytVp+7LrW3PFZUj4zhHSmigQ4hqYgmRJfXspYjbXT3pG4dFTNZgXmK0i7
+	UOa2SmVG/TkiuEaIMADUni9eOD0OMbkgO/9aS6KEXje1LHEXYufrAegeUhsezJM1a6zZi4k8m6w
+	fu6eLgl3DYdJxAMhNoysqOGuVNR2CD6xdYVnbs8875GXVzJ2dNY6ZB2dynBJev95hh/vq2kR8gp
+	CQxNaT3bMx5L4emjvy1kfMRIJufVaK+tHtuOqDWUxTC/ua4vz9hppyJLyeURHuBF56fynMXjO8u
+	FhFa6SawByHl5ObOMfXZHOI+7wAVkw59qyv4v/lQHzxsjBEMbVgXFw5PZxdRtjNrrj4/FNf+5bP
+	OwLJKS6aWAwTnFElH9vxXpbHygeei/KlfT8XDELipJ1NvWDqOg31fYedcSBIh8AJXy/RexfFIv+
+	Zzhq7PDg==
+X-Received: by 2002:a05:600c:2255:b0:490:c024:2eba with SMTP id 5b1f17b1804b1-49240e85de0mr121166565e9.22.1782029883569;
+        Sun, 21 Jun 2026 01:18:03 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.18.00
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:18:02 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Fabien Parent <parent.f@gmail.com>,
+	Val Packett <val@packett.cool>,
+	Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Julien Massot <julien.massot@collabora.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 5/9] mfd: mt6397: Add support for MT6392 PMIC
+Date: Sun, 21 Jun 2026 10:13:30 +0200
+Message-ID: <20260621081634.467858-6-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+From: Fabien Parent <parent.f@gmail.com>
+
+Align the MT6397 PMIC driver to other MFD drivers by passing only an
+identifier through mt6397_of_match[*].data and add support for the MT6392
+PMIC and its regulator, RTC, keys and pinctrl devices.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f50.google.com (mail-wm1-f50.google.com [209.85.128.50])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id BBECC274B44
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:18:18 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.50
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029900; cv=none; b=AvKF5PCo3r0gEZ1jdR6O6Ref2aPk1riq9f+nC3LZY0/j1LueRnC3E3bXymBq8EChfUROHAFD69oiACuM0+gt5xYlGrqycXmFNlBRzeNGMQInvqDVkeAFjvMfIk27+LgcGtsWKaqQrvb80EpN1B17iI8/3Zo/+iHQ1Lkd8bzyTsI=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029900; c=relaxed/simple;
+	bh=2bZt2a2zRVSBV3MA0JWJ6SLazOmmGt1tpatOsImPFW4=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=PZO+hRj5Ut0ZyGoXmXlJXx9a15XUoMjsPrHDOXact0dQSKwwnZD96IerT7jyC2/XkacaAyhxxrYdvDrKog3AOqrybihi2zqrTK2WxCo637xyt24blo5axe5T3HP3EGqruysm4kXt/jeIv27GlzchOB0Lj1Od1ZhFYnFmkaVovX8=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=H0eLtDjo; arc=none smtp.client-ip=209.85.128.50
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="H0eLtDjo"
+Received: by mail-wm1-f50.google.com with SMTP id 5b1f17b1804b1-490b9318997so23006835e9.2
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:18:18 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029897; x=1782634697; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=RzvCFyjr8bx4d2LvTNFN/pQ0QZHT1mGXGPc+CarTw40=;
+        b=H0eLtDjo1M6DTs34J++HTmOYKpyPhHLh1+QF4GHZfdTgFP0VdggJs0p5ngDTQyrb8z
+         jj01noAzjOVngeJYgxlVHPkeC1MYsLIGkGZU0hj3qQM/TLjn49OTd7Ub2CJVsoomDnZH
+         yr0V+HL+w71Xm3vujFUK0Gtx3ZvKv6HDO+iA5iojOjBciaPgZZQ2om1ctumPKUIX+aTw
+         zf9f4zfqnVewMo4eub52t15EqhPBxSSU4YVwNQEVmDczMrGLcDZMsB/sIx0DsTUQc3Lc
+         kuDxq7MsHaPqATHMd14VKeLrFr2rgw8PgRcBRmmL4yov4AgnKzsF0rsLfU8XB+6u7kS7
+         otQw==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029897; x=1782634697;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=RzvCFyjr8bx4d2LvTNFN/pQ0QZHT1mGXGPc+CarTw40=;
+        b=pjKSGoUnvkFxIvmbYz2ldcUgNkumzPQY1EDSdBAzlqHsNzXFmXP4Yl/tg8folaCYsv
+         mvWAlcYAecLOiAxW7YNzBUAw/dgu9Fk7JFWGYZqL/EVpYhp175iK3s/eighLbeYCqUEG
+         DQ87L7k7uoHIyQeB7fDjJiY90lQd4/1+PYGf6ua1mGPEuss6y28e5bJymiJlrBBxJZ6L
+         fnt6EfXKPz8UDIuiVx+H0kB616Ep0h2FFrVLkwY81U6fSUPfX/7ncGi2sz+HIVf5qeyG
+         F4BD2jnXmRMR70S0y9LDnksx/PPoJZ/dAOzElAKH8NvCeSB17yDe5MKJwujB3ALEZZUJ
+         jC3w==
+X-Forwarded-Encrypted: i=1; AFNElJ+pWBGdfbbLbi0PTOmnqQDlUM4Sl2AYQqgGCCcdp0LGQ4AuH/GrshJvdg3Rke80yxoJJ07gL9AKmn0FzA==@vger.kernel.org
+X-Gm-Message-State: AOJu0Yy0ap+TaGpYsY1W7Www/Hu4RxyLQBbasvs7C/Zh8/NyemtnMPOe
+	fPRSAooYkUIMwVfxOSdYur87fxmYORAvmKc9LJGv6O2L0FxOB6ASXIl2RnGlwiek
+X-Gm-Gg: AfdE7clkFcME0M6/XHM2+tukbe63kemMIBIzmv/c7bVys8ii9BWGtHigz5R9Ko1ryhU
+	amDNy+PbG1cKGNYHgZyZSWtt3ZNew/ZJRCI2w2aCT2lPYEmqrwHzienoYtsOnXlDRL1ysXQxJmz
+	Xmoi2xJafz/QKnHs8FL7MHZ7csHW5y4K6Gb7fwdDWIMfweVWhJNPYgg5NcCIa1QqM+fp0u1i3uU
+	BgnkzGH519iU2todmTLRiGbY2dn3ZxzN1AaekJYV8xnuM67HGRR9NtB1UAqZbo3N++2eJjz+sbx
+	YZxTKLMr/ANeG7e+95lk61qYRiSzcYzfmngWgUMHqswylrxf2vVbll44+U/5hPSxh2yFhqVxS6X
+	wwor4pqK9n8htGtykbP3q4he5ZxKYYYtTULRBivkp3QPJ8K09TFrwb0xRQQLTzzFtxe5wCIn+pQ
+	blgLHNQA==
+X-Received: by 2002:a05:600c:45d2:b0:492:1e36:85dd with SMTP id 5b1f17b1804b1-4923f596bbbmr163549115e9.37.1782029897128;
+        Sun, 21 Jun 2026 01:18:17 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.18.14
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:18:16 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Val Packett <val@packett.cool>,
+	Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Julien Massot <julien.massot@collabora.com>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 6/9] input: keyboard: mtk-pmic-keys: Add MT6392 support
+Date: Sun, 21 Jun 2026 10:13:31 +0200
+Message-ID: <20260621081634.467858-7-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+From: Val Packett <val@packett.cool>
+
+Add support for the MT6392 PMIC to the keys driver.
+
+Signed-off-by: Val Packett <val@packett.cool>
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f49.google.com (mail-wm1-f49.google.com [209.85.128.49])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 707CE275870
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:18:33 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.49
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029915; cv=none; b=s2Slzx8WTrXBRr92I20mncuZbrmkMJRnipcTNVgUsLTetTO3+gqKCm+RlfrQhi/aGTPt2VUoOUtjFX9W7XRJ8L/TkxTn/YxQ2SyPC1ISuBGfJlRczWOg2QD7ZRQa3nfbw/xt6JfQ+ouMQgfApoUxeX65xXun4gVQ019lB5vEnkM=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029915; c=relaxed/simple;
+	bh=qTaF7TRiZkTD1hP7KOH8ckvyLCF0n7wFHby0gHb6G+s=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=ErU50m2ZBJwk38IoBVNWZHBVHdbA+adW7Pgre0+EeouKNInJwr/NWqwU2AiWrS9tYrj0akHfL60ZnLB2yPvOOuLm/NsqiSP5JA/7FWhdJiCaPUwNTxICqdUD7CxMQ7ADsj1UgbrMPvNkpJsWufL4hIZC2VN03UmpUFhKO62VZBM=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=bIKd/OJQ; arc=none smtp.client-ip=209.85.128.49
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="bIKd/OJQ"
+Received: by mail-wm1-f49.google.com with SMTP id 5b1f17b1804b1-490bc6a7958so32977435e9.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:18:33 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029912; x=1782634712; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=nG1MlD4PN9leIlB74vSBgHn1juhdOfLFrGDifVzjZsw=;
+        b=bIKd/OJQnsTKiBhG+4NCJp5GUWWprO32SN2z2vb8yS8k8ZItlda8rB96RIk2RABHP7
+         ypt+PaoX5rZsq0vHb/a/ZlX3gJp6BclnZs1NCUTWp8ZvStumWsCyKvQBCnWD+tV483eU
+         LpG2qg0ZTzS5gVPGRw+8cf9NwCNFYcOtaSmqfM5OkcWpmiKcvGn0jtzhJIAo8zXe1aff
+         jk9XdgePfz0G3Z0IcLTUmGHm4ujtWiRxhemaSBnNwMqywFdbCR/u+EPDgzxdi9FKNwku
+         gIIM5a6VzREwioNDpYCTRpGJTJzBKnpo6KYEIHn60Y/9eEz3RgFqr3ahggF91tMUUmFA
+         x4/A==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029912; x=1782634712;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=nG1MlD4PN9leIlB74vSBgHn1juhdOfLFrGDifVzjZsw=;
+        b=n6S64N5rnPhrzukcaZxQ1gq6y7CmkCQzD9OKfLzfjewOiehEalGz4TDoHr4xbvTwvR
+         BvX7MvCFCirqKPgjYaF7Y24SyFnkFLta3X5iYR1H9+7njVo10qlU5fNZed4C4SXVrWAd
+         nhjz4anKGy6QsxD2GIszMBO/NtcaCtvDEk19qCPfTNZ8N47ekU64BZO3Q840OTKKengB
+         Op3htcsPITFa0uuMcn1Z3UwOgOmLJ9o61ap0UCtJbFkijm6ZsGkQDgaLmgwFYto6Q+YA
+         9Wvgtg1nzHnT/AT7Df7GX3rb3DdKUz8aVsjmEbnCOpGDHduKuyzX+Xlq41W0Y344iSVZ
+         5vZg==
+X-Forwarded-Encrypted: i=1; AFNElJ/m0tl8hPp4pQSQ3+61Yn5RDm/tLTBAicSi9wIY9dQNsPGCAmQVI4gKCmi9d6Yo/ynv0LFqrjrFNwXUaA==@vger.kernel.org
+X-Gm-Message-State: AOJu0Yxp4RxVh+Jh3GXqukRw7oFu73cO+DC1Qp/I/DOZh1TWlnvRI41f
+	CLXRY1yMlQH7JcrwbG0chYD9+uRS7rqOwvLJNCmsZPdaQgiB6ddWwFVm
+X-Gm-Gg: AfdE7cnqYA//oXlRpET0YS0P7BSXV7cnkkJMKUPAQMAbQ+PcFJiAIcK2RdE17I5cmNl
+	DQgb01DIuFRyr8g2mkd5TDEyE9z97FEomQJcidIeXI9rjs9D6g9mhy8ohodfNZsdPmfnLWtDsqD
+	TW+qfOC70PJD2r5evnV/4pcSBT8KSvmNjk9EoORtseEiVsP+6NBejvwTTrsOE4ZABKBi/zQn2+5
+	R+cPn7dvP5E6U4quYsbVb4lmL7ULpAeIAxjRFU9s6NZERtQYNqt4VxiaPwSN+G/IG2inZSciLZ3
+	KQ6vMhxbmNUqSaLSV8JprTxGoZ2D8NTOemmK8QYwhjdnYw0atR99BIWUxbUQN9tTWY9Lc0I+rnt
+	9g+pvBivNZtbUCNHKPfCov9r8x8RBV4dP6JxQgav/aknL/4pFeGZg7sQrK7m2xgAXfYc5SjUY5S
+	Rp1lJz6g==
+X-Received: by 2002:a05:600d:84ca:10b0:490:e180:2e0 with SMTP id 5b1f17b1804b1-492409fbfb9mr89262695e9.3.1782029911807;
+        Sun, 21 Jun 2026 01:18:31 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.18.28
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:18:30 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Julien Massot <julien.massot@collabora.com>,
+	Val Packett <val@packett.cool>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 7/9] pinctrl: mediatek: mt6397: Add MediaTek MT6392
+Date: Sun, 21 Jun 2026 10:13:32 +0200
+Message-ID: <20260621081634.467858-8-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+Add support for the MT6392 pinctrl device, which is very similar to
+MT6397 with a handful of different property values and its own pins
+definition.
+
+Update the MT6397 driver to retrieve device data from the match table and
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f43.google.com (mail-wm1-f43.google.com [209.85.128.43])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id A1AFF27BF79
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:18:47 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.43
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029930; cv=none; b=AnbcHMb/w7Kecr3nWfiM3hOorEnHIYeQDHsDAatO9Bns0MLBhsjAYEzEDRP7gGuGmyzkCK1Z7WE6ZaqKGSdxoNrmtixWWoJreShgtmB1cudXP9uxa+xHmmHyUcNh51XavgauN5MqKSo8kdQZlUOfUaz5GivQjDyMiE4/F/bvycE=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029930; c=relaxed/simple;
+	bh=wETia4oc98PyiopgUtOpRNrEX8h081/LGdfwixICOvE=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=VoffBsjLM2BntS6xC8oHjHRyeo+hhEUylXhseXcvuwFy9WvgUuKoYB7d7vFxLOFccxfiQKWYhz40Fn9LHaf7S0Sei3y1LvOwbD0v04CEhKGIWoMcaVccUn/UK1dVnOXTjQo9ZGDSSi73aagYC+jotZYqle8vLGUewPJJXcm3ISE=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=o/zU4wvs; arc=none smtp.client-ip=209.85.128.43
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="o/zU4wvs"
+Received: by mail-wm1-f43.google.com with SMTP id 5b1f17b1804b1-4923fb1f095so21252935e9.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:18:47 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029926; x=1782634726; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=jy2cRcsDRVhkeVe5/6n2SOHKBPDmNgxATb0Gy1fY+qc=;
+        b=o/zU4wvsOsnqbt2qnrwf3WBtknDR9QRO1vCf2Wg2kgmxztfl+ba4MkcUKT90J1m3pK
+         bM+UOLCkQrJ38Gr1Efeg9Hx2nu3Qdayuo6t+aOuz+l/vorhpnaUbf4QZs+Jm3/xaKOWS
+         VGf3DSu9cofKUl+YX5xTt8dhy8+SmrPLk92s+wBc9kBp1XlFph871f1aCL2lj7I42Hgb
+         jfCguBApb94uW9M2J5GO385HuKlv4mLKWXtOVA3R+6z7SfQdRQXawHAYISsDJt2DqibK
+         KNA1Mr/SzTOUutf52EdhFIAGiv44o4oT+T1L4YEeZ2z6UmPs3q24jYA2PIeC2O+RJGw6
+         NmIQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029926; x=1782634726;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=jy2cRcsDRVhkeVe5/6n2SOHKBPDmNgxATb0Gy1fY+qc=;
+        b=YfiWtBUTtp2GkiKfnoDQPSxBJlcSYQ5D0IwXeU68gztTlpqROGSXRKIw2UeGGP39fx
+         Ourkk+3cUYJk89MJzwMPxP0qGPO8p/arJeWsHzwji3uqM0/tm6wZpuS9EEDYZgeEH3SY
+         USXXKtx0uyvsUTeF5/NJIYGDvrxf2hn9GQoLR0szRuci2DGAIM+QK8LxA9Ybw2DMWp+l
+         9yiGPJMEfR/LaZWxy8WRHAf7Rcfoo4CswvHIYAM6i8vMDCd/e83lstUhfqTO6rh+f8sZ
+         0CMYZwrNkqEq9cUAwoKvOeH0Wts1ALtDqFzEOvztS9V0xXDpsYsJ20iedh62O6Ba+RqM
+         lX/g==
+X-Forwarded-Encrypted: i=1; AFNElJ/730RUp3VGSjrhVcIktYH/A5xb9rBchXnHn2+Z2deywE7Iv020MomHuu9FZaSk+1GdEVZpgyhW4bOjbQ==@vger.kernel.org
+X-Gm-Message-State: AOJu0YyBMMPFz+y3vvazWk+yQfHuQPDod3BQiC+BQopUhK+0eKVHlTBE
+	9FgiN/W9MdWr9ES9tyrx8IPeA9saXiv4e8JnHo4JhzXBrTPEp9yAh0BL
+X-Gm-Gg: AfdE7cleQ0CbPqk3JOv4Lv6efheD7++Kyo+AbPfrQAx4MWyfB/KS+LyagPuAeClc5k/
+	R4Jgazz7btwlGbNT2cDVc2F+xV4UzdTflAuPzlPfPCu6myfMGQAqrnTicQy/FzMpHUtOqYjUjqa
+	bAXt0kmXg86a0nDv2PTGQhHnwAvOHg2OldYmHSgwftZdtsMK0iv7yysO+qruZZC4NaUV8/gv29i
+	LyFhu2SUgkoQx+6T3RpwkpPWqCoj/Ds1ArE4POPpeqCdKXeNftBMmZRYUyVw9PjaPrvN8gEw7L0
+	EgpUzmP6GS/cvH7C5UwD6iRYSDhyVs5QWEpl9Dhv81ibKwX1ZG4ZhnOz2J6O9yLybpPO5Y/z1NK
+	TurGhitiu6Wm9nuOTHcHy4As3hL98CKYadSBZ06F0lt0djhD/rUzyIYbXQAIG/Fv8OUAYFcSewW
+	74h/0e+Q==
+X-Received: by 2002:a05:600c:698e:b0:490:e190:3b50 with SMTP id 5b1f17b1804b1-49242328b04mr128044005e9.9.1782029925994;
+        Sun, 21 Jun 2026 01:18:45 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.18.43
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:18:44 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Fabien Parent <parent.f@gmail.com>,
+	Val Packett <val@packett.cool>,
+	Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Julien Massot <julien.massot@collabora.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 8/9] regulator: Add MediaTek MT6392 regulator
+Date: Sun, 21 Jun 2026 10:13:33 +0200
+Message-ID: <20260621081634.467858-9-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+From: Fabien Parent <parent.f@gmail.com>
+
+The MT6392 is a regulator found on boards based on the MediaTek
+MT8167, MT8516, and probably other SoCs. It is a so called PMIC and
+connects as a slave to a SoC using SPI, wrapped inside PWRAP.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from mail-wm1-f51.google.com (mail-wm1-f51.google.com [209.85.128.51])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES128-GCM-SHA256 (128/128 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 6EA4226F46F
+	for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 08:19:01 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=209.85.128.51
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782029942; cv=none; b=uym5k7AZ5nJakIzn5P0QWwEqmUezX9t0DxmvmALL4WWy4hO0mA99YYA1S9bvRKMRkevGby3rQC77aQnfQct3GbmqOxfYKoRXBswNhRcjV2unEMCH6IMjzD6HvD+XF3KjEfH8Zasl1u+Lbmd3qv1LlE0YPwmy3jGbNztUyoVsajE=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782029942; c=relaxed/simple;
+	bh=Ke4oNBTIN5zFKMd3J9BHn1qxky5pbFNLbDwiYB1favc=;
+	h=From:To:Cc:Subject:Date:Message-ID:In-Reply-To:References:
+	 MIME-Version; b=rFkwKll0py/5WTMYKCbLrQb3h+4g2UzGvelo5CMVNnFEgcZ6zLVUfiKAN6VoSY6hE7G7wLjbBS1bMfCL3F8e7KgijVX6jc9EAgWPLyOUuoGldiRH4oVxjAVpccPL5vWHLcZWC9pcYlh+67WuUTQxtpZ/Yylz4iGQGjlUcxvnz1k=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com; spf=pass smtp.mailfrom=gmail.com; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b=fGxWQl1Q; arc=none smtp.client-ip=209.85.128.51
+Authentication-Results: smtp.subspace.kernel.org; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: smtp.subspace.kernel.org; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="fGxWQl1Q"
+Received: by mail-wm1-f51.google.com with SMTP id 5b1f17b1804b1-490ac357c55so36385475e9.1
+        for <linux-input@vger.kernel.org>; Sun, 21 Jun 2026 01:19:01 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20251104; t=1782029940; x=1782634740; darn=vger.kernel.org;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=iVyCXR0GBeSupYN2T5Gv0/aCNSD3o/MI5RFA+1IIzVE=;
+        b=fGxWQl1Qnu5G1Vf+/NKDAZiC0fdQ5CLThNwyQ9yQ/NeJ/ZEsXv9Mh+87LXMzTyzDQj
+         mbr4BGGY9iN6oDsTCaUItUVHG4suUoTKV6kTjfHC6eX6j0fxRM/CBgZ+0Z/VNvHl/o1o
+         4WeFfWB/L/BvQmOZVSYmsVM2hdaoBt99qaD8BiYVYrVet6izFAkD7lw+hcb7Idh6jChO
+         Nvs1iJ2z+1RrNO1LDEvqe7D7vMshJk1mS9SecPxTPuGyM3c494m5fSgyPYns3qntRRqd
+         66Xvw3CQE35SM+a9tdejDwpash0Xw7hNjKPBETShEOmHY0kjhQng2IKfN/sIFfLUphZr
+         YVoQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20251104; t=1782029940; x=1782634740;
+        h=content-transfer-encoding:mime-version:references:in-reply-to
+         :message-id:date:subject:cc:to:from:x-gm-gg:x-gm-message-state:from
+         :to:cc:subject:date:message-id:reply-to;
+        bh=iVyCXR0GBeSupYN2T5Gv0/aCNSD3o/MI5RFA+1IIzVE=;
+        b=PzEG0N7Qw7ed+V9fWU8gyq6YHjuSVzi/f6Y0KBWB2nTRKvrdKsawAEFhKaJUkWz7NU
+         HWCH27X0QbTr+xNbqsqpHRmE/REWni8JdG8qzThivVTqTJy0EEDqONdA4l1evjTnuqxv
+         RKc6TrvL4gssOaobKs5Dhw2nn9ZXa+ocM1MD3pNeya57LV8tbDWUe9RHVZqDQ3iFiP7o
+         oDhVajuK5B/KaddPqRB8XlBurVtsf+lBCfYp4K4MgbH/Z+V95JJJRvXYHYRg6GxOciTS
+         XZXMihvWg13vCjh9S0pIzWGBn4ci9o1ZsdPohFpZ0k1A+qIE3peu86MHzRtSP0gT42sO
+         NNPw==
+X-Forwarded-Encrypted: i=1; AFNElJ88LEAu0mcMLwMlJ4AMnIXc9udLerJZ0PShceInLXIH5oDioTDMSnZehFJfyeg8YJ0b0WwiBcxmkOZesQ==@vger.kernel.org
+X-Gm-Message-State: AOJu0Yy1HSp2DqXZ3rrAiGJ0MUrUoR5G1evkMrh/mee2GXe4eNu7AphU
+	EPhUhyCxkCcLt7xRfWLvbrT3dzmMrX8o7FOTRJO2InzTSrguhg2LZgti
+X-Gm-Gg: AfdE7cmf04Cxc23uuYw6AY2uzkPICcX8n5A9wN2zjh+OkzIPya1BLUhl2W6zW+/jVRU
+	aWxtv/GPkovAGusdS3oUW9I/b3SXZUiswJRL5M81DHbd75/Q41z4KN67kQTrrhtZNuYcNYabgot
+	uJmWHav8x+oVHeCIP3fAly+7NnBhLL8j29jQr7gHZcoRcDYe6J7K9osaSuNlZKygfbyQFFNW3sl
+	ezvp+tNsJ2TYcz8L1Qk/bJIXm8z4wK1jiod7AooopxnF0RA7ABxbGxwJcRVlKNvGO/915WkF9zR
+	lDHEJ1uRVLiYmMs9aYJabPXmjWzIgzu8cMop0VZ7B4fwl2NeqXydHLZLND3CcKHZ8Ki18jXyqAo
+	6LWG1uazS0YYtu+hn49XVrwrm/e5HVun73i5u/XHmqIWfcK/ZEmmKdtnGflg+qjigMyEWL2It63
+	iu2dIx1Mb7FgvSyAJ7
+X-Received: by 2002:a05:600c:6990:b0:492:490b:a604 with SMTP id 5b1f17b1804b1-492490ba610mr85395625e9.37.1782029939962;
+        Sun, 21 Jun 2026 01:18:59 -0700 (PDT)
+Received: from luca-vm.. ([81.56.18.151])
+        by smtp.gmail.com with ESMTPSA id 5b1f17b1804b1-4923fe7b9e5sm194100445e9.10.2026.06.21.01.18.57
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Sun, 21 Jun 2026 01:18:59 -0700 (PDT)
+From: Luca Leonardo Scorcia <l.scorcia@gmail.com>
+To: linux-mediatek@lists.infradead.org
+Cc: Val Packett <val@packett.cool>,
+	Luca Leonardo Scorcia <l.scorcia@gmail.com>,
+	Dmitry Torokhov <dmitry.torokhov@gmail.com>,
+	Rob Herring <robh@kernel.org>,
+	Krzysztof Kozlowski <krzk+dt@kernel.org>,
+	Conor Dooley <conor+dt@kernel.org>,
+	Sen Chu <sen.chu@mediatek.com>,
+	Sean Wang <sean.wang@mediatek.com>,
+	Macpaul Lin <macpaul.lin@mediatek.com>,
+	Lee Jones <lee@kernel.org>,
+	Matthias Brugger <matthias.bgg@gmail.com>,
+	AngeloGioacchino Del Regno <angelogioacchino.delregno@collabora.com>,
+	Liam Girdwood <lgirdwood@gmail.com>,
+	Mark Brown <broonie@kernel.org>,
+	Linus Walleij <linusw@kernel.org>,
+	Julien Massot <julien.massot@collabora.com>,
+	Louis-Alexis Eyraud <louisalexis.eyraud@collabora.com>,
+	Fabien Parent <parent.f@gmail.com>,
+	Akari Tsuyukusa <akkun11.open@gmail.com>,
+	Chen Zhong <chen.zhong@mediatek.com>,
+	linux-input@vger.kernel.org,
+	devicetree@vger.kernel.org,
+	linux-kernel@vger.kernel.org,
+	linux-pm@vger.kernel.org,
+	linux-arm-kernel@lists.infradead.org,
+	linux-gpio@vger.kernel.org
+Subject: [PATCH v9 9/9] arm64: dts: mediatek: Add MediaTek MT6392 PMIC dtsi
+Date: Sun, 21 Jun 2026 10:13:34 +0200
+Message-ID: <20260621081634.467858-10-l.scorcia@gmail.com>
+X-Mailer: git-send-email 2.43.0
+In-Reply-To: <20260621081634.467858-1-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 8bit
+
+From: Val Packett <val@packett.cool>
+
+Add the dtsi to be included by all boards using the MT6392 PMIC,
+providing support for regulator, keys, pinctrl and RTC.
+
+From mboxrd@z Thu Jan  1 00:00:00 1970
+Received: from smtp.kernel.org (aws-us-west-2-korg-mail-alma10-1.taild15c8.ts.net [100.103.45.18])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id DEB5D1A6836;
+	Sun, 21 Jun 2026 08:28:18 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org; arc=none smtp.client-ip=100.103.45.18
+ARC-Seal:i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1782030499; cv=none; b=WXiisCU2IFpEkcCZSRIyh2UW2tOInthbqWtmgDMHoyw+AcwWDA0B5XjAI3iLWmlDDUceFIGYVlVucYt9yS05SVCll9KxiZ6NBEEJOCRedXPjDNH7qbxPtyfA/MWJKeKpDTiFs2nXP6OFPU9hVe5rwnmudRrdF2Z7C5DEeKAOj6U=
+ARC-Message-Signature:i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1782030499; c=relaxed/simple;
+	bh=HxWvA8thnN/i6lhpt9d1jR1BQibREwSMNWrvvn+8jBY=;
+	h=From:Subject:To:Cc:In-Reply-To:References:Content-Type:Date:
+	 Message-Id; b=nnyYSqDLb97UpiLXRK05G49tIZ9ORDMJPPF0asMoikykwri2hLhaalpyBh7hSwkJge0YMDjjXguWhCdUtzUBn8isYw4UwTsQlDdxHnnpsfeVo/mCsUWVCKyH7LupxJZlOHM4N42Q/S5zkahBT1xuO7NpmudlTHja5K3LXuXU9qI=
+ARC-Authentication-Results:i=1; smtp.subspace.kernel.org; dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org header.b=jlOXErVS; arc=none smtp.client-ip=100.103.45.18
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org header.b="jlOXErVS"
+Received: by smtp.kernel.org (Postfix) with ESMTPSA id 428DB1F000E9;
+	Sun, 21 Jun 2026 08:28:18 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=kernel.org;
+	s=k20260515; t=1782030498;
+	bh=2L6kKHlsjLdT0kU0g0n3uuer0y758z+IMlNK9GBYCQU=;
+	h=From:Subject:Reply-To:To:Cc:In-Reply-To:References:Date;
+	b=jlOXErVSNNEW9V6NTrb27h1CLRRcm3CMT0HqyR/QdoPyd0MYmo17iIbxtFCxqROLh
+	 373c/leFjhiYOGHO6i3QGjHtjcOdRulFO/vrzxCZ1zEu1GMxIf0zbyMhir9lL2dYwA
+	 ESRcj2YvBByhkrr+sGhLd/H1k8CpBBwcwxWTMaF/V3dd7MSGf46BsETjZxqJOJew4+
+	 iAZXkngQNbOc1byHlD67R5N0Wky8kweSi28vjCo6R/IsoDff42oj3JsJwpH4Du8X1j
+	 6xfuBjaesV+SbIiOfMCYryJQ6ZadSKh+8pjsvZt6/Yg2WqZcvIYtIHKxstPabQveLN
+	 Sl2QMGBVud3mQ==
+From: sashiko-bot@kernel.org
+Subject: Re: [PATCH v9 6/9] input: keyboard: mtk-pmic-keys: Add MT6392
+ support
+Reply-To: sashiko-reviews@lists.linux.dev
+To: "Luca Leonardo Scorcia" <l.scorcia@gmail.com>
+Cc: robh@kernel.org, dmitry.torokhov@gmail.com, devicetree@vger.kernel.org, conor+dt@kernel.org, linux-input@vger.kernel.org
+In-Reply-To: <20260621081634.467858-7-l.scorcia@gmail.com>
+References: <20260621081634.467858-1-l.scorcia@gmail.com>
+ <20260621081634.467858-7-l.scorcia@gmail.com>
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+Date: Sun, 21 Jun 2026 08:28:17 +0000
+Message-Id: <20260621082818.428DB1F000E9@smtp.kernel.org>
+Precedence: bulk
+X-Mailing-List: linux-input@vger.kernel.org
+List-Id: <linux-input.vger.kernel.org>
+List-Subscribe: <mailto:linux-input+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:linux-input+unsubscribe@vger.kernel.org>
+
+Thank you for your contribution! Sashiko AI review found 1 potential issue(=
+s) to consider:
+
+Pre-existing issues:
+- [High] Potential array overflow when iterating over device tree child nod=
+
