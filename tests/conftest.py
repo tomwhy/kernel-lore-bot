@@ -63,9 +63,11 @@ class FakeBot:
 
     def __init__(self, fail_for: set[int] | None = None):
         self.sent: list[dict] = []
+        self.attempts: list[int] = []
         self.fail_for = fail_for or set()
 
     async def send_message(self, chat_id, text, **kwargs):
+        self.attempts.append(chat_id)
         if chat_id in self.fail_for:
             from telegram.error import Forbidden
 
@@ -74,6 +76,9 @@ class FakeBot:
 
     def texts_to(self, chat_id: int) -> list[str]:
         return [m["text"] for m in self.sent if m["chat_id"] == chat_id]
+
+    def attempts_to(self, chat_id: int) -> int:
+        return sum(1 for c in self.attempts if c == chat_id)
 
 
 class FakeMessage:
