@@ -1,0 +1,30 @@
+# Secrets — these are mounted at runtime (compose secrets / env_file), never baked
+# into an image layer, where they would persist even if a later layer removed them.
+secrets/
+.env
+
+# Local state — the container gets its own via the bot-state volume
+data/
+state.json
+seen_threads.json
+
+# Python caches and local virtualenv
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+
+# Not needed at runtime
+.git/
+.gitignore
+.claude/
+.superpowers/
+.project
+docs/
+tests/
+pytest.ini
+requirements-dev.txt
+README.md
+compose.yaml
+Dockerfile
