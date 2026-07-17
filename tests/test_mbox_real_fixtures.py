@@ -1,9 +1,9 @@
 """
-Characterization tests: they now cover the extracted kernel_lore_bot.sources.lore.mbox
-module. They originally locked in the behavior of the old scraper.py so the
-extraction in Task 5 could be proven behavior-preserving; the assertions below
-are unchanged from that baseline except for the empty-mbox test, which is
-inverted because Task 5 fixes the RuntimeError defect it used to lock in.
+Regression tests for mbox parsing against real lore fixtures.
+
+These began as characterization tests written against the original scraper.py to
+prove the extraction preserved behavior. scraper.py is gone; the assertions
+remain as the contract for kernel_lore_bot.sources.lore.mbox.
 """
 
 from datetime import timezone

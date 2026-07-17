@@ -20,7 +20,7 @@ services:
     container_name: kernel-lore-bot
 
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "bot.py"]
+      test: ["CMD", "pgrep", "-f", "kernel_lore_bot"]
       interval: 60s
       timeout: 5s
       retries: 3
