@@ -61,10 +61,18 @@ def conftest_fake_client():
 class FakeBot:
     """Records outgoing messages instead of calling Telegram."""
 
-    def __init__(self, fail_for: set[int] | None = None):
+    def __init__(
+        self,
+        fail_for: set[int] | None = None,
+        error_for: dict[int, Exception] | None = None,
+    ):
         self.sent: list[dict] = []
         self.attempts: list[int] = []
         self.fail_for = fail_for or set()
+        # chat_id -> exception instance to raise instead of sending. For
+        # simulating non-Forbidden TelegramErrors (BadRequest, NetworkError,
+        # ...) that must NOT be treated as "this chat blocked the bot".
+        self.error_for = error_for or {}
 
     async def send_message(self, chat_id, text, **kwargs):
         self.attempts.append(chat_id)
@@ -72,6 +80,8 @@ class FakeBot:
             from telegram.error import Forbidden
 
             raise Forbidden("bot was blocked by the user")
+        if chat_id in self.error_for:
+            raise self.error_for[chat_id]
         self.sent.append({"chat_id": chat_id, "text": text, **kwargs})
 
     def texts_to(self, chat_id: int) -> list[str]:

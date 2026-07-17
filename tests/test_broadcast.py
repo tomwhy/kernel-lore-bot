@@ -1,6 +1,9 @@
+import asyncio
+import contextlib
+import time
 from datetime import datetime, timedelta, timezone
 
-from telegram.error import Forbidden
+from telegram.error import BadRequest, Forbidden
 
 from kernel_lore_bot.delivery.broadcast import Broadcaster
 from kernel_lore_bot.filters import BlockedAuthors
@@ -220,3 +223,77 @@ def test_collect_returns_new_threads_before_updated_ones():
     )
     result = b.collect(b.cutoff(NOW))
     assert [c.thread.id for c in result] == ["new@x.com", "old@x.com"]
+
+
+# -- defect 18: the event loop must not freeze during the scrape ---
+
+
+async def test_run_does_not_block_the_event_loop_during_collect():
+    """
+    collect() runs synchronous, blocking HTTP under the hood. If run() calls
+    it directly, nothing else — like a concurrently scheduled heartbeat task
+    — can make progress for the whole duration. Offloading it via
+    asyncio.to_thread lets the loop keep servicing other work.
+    """
+
+    class SlowSource:
+        def fetch_threads(self, since):
+            time.sleep(0.05)  # a real, blocking sleep — simulates requests.get()
+            return []
+
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    b = Broadcaster(Settings(), store, SlowSource())
+
+    heartbeats = 0
+
+    async def heartbeat():
+        nonlocal heartbeats
+        while True:
+            heartbeats += 1
+            await asyncio.sleep(0.005)
+
+    task = asyncio.create_task(heartbeat())
+    try:
+        await b.run(FakeBot(), now=NOW)
+        # Checked immediately after run() returns, before the heartbeat task
+        # gets any further chances to run: if the event loop had been frozen
+        # for the 50ms of SlowSource.fetch_threads, this would still be 0.
+        assert heartbeats >= 1, "event loop appears to have been blocked during run()"
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+# -- defect 19: only Forbidden may prune a subscriber ---------------
+
+
+async def test_a_transient_telegram_error_does_not_unsubscribe():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+    bot = FakeBot(error_for={1: BadRequest("oops")})
+
+    threads = [_thread("a@x.com", NOW), _thread("b@x.com", NOW)]
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    # chat 1 is retried for every message — it is not "blocked" — and never
+    # actually receives anything, since it always errors.
+    assert bot.attempts_to(1) == 3  # header + 2 thread messages
+    assert bot.texts_to(1) == []
+    assert store.subscribers() == {1, 2}
+
+    # chat 2 is unaffected and gets the full digest.
+    assert len(bot.texts_to(2)) == 3
+
+
+async def test_a_follower_transient_telegram_error_does_not_unfollow():
+    store = InMemoryStore()
+    store.follow("old@x.com", 5)
+    bot = FakeBot(error_for={5: BadRequest("oops")})
+
+    old = _thread("old@x.com", NOW - timedelta(hours=10))
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert store.followers("old@x.com") == [5]

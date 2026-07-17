@@ -8,6 +8,7 @@ followed them. Chats that have blocked the bot are pruned as they are found.
 from __future__ import annotations
 
 import asyncio
+import enum
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence
@@ -33,8 +34,26 @@ log = logging.getLogger(__name__)
 _YIELD_SECONDS = 0.01
 
 
-async def send_to(bot, chat_id: int, text: str, reply_markup=None) -> bool:
-    """Send one HTML message. False means the chat is gone or blocked us."""
+class SendResult(enum.Enum):
+    """Outcome of one send_to() call, distinguishing "blocked" from "failed"."""
+
+    OK = "ok"
+    # The chat has blocked the bot (Forbidden). Safe to unsubscribe/unfollow.
+    BLOCKED = "blocked"
+    # Any other TelegramError: transient, a 5xx, a network blip, a bad
+    # request. The subscription must survive this — only Forbidden may prune.
+    FAILED = "failed"
+
+
+async def send_to(bot, chat_id: int, text: str, reply_markup=None) -> SendResult:
+    """
+    Send one HTML message.
+
+    Returns SendResult.BLOCKED only for a genuine Forbidden (the user blocked
+    the bot) — that's the only outcome that should ever unsubscribe/unfollow
+    someone. Any other TelegramError is SendResult.FAILED: logged, but the
+    chat is still a real subscriber and must be retried on the next message.
+    """
     try:
         await bot.send_message(
             chat_id=chat_id,
@@ -43,13 +62,13 @@ async def send_to(bot, chat_id: int, text: str, reply_markup=None) -> bool:
             disable_web_page_preview=True,
             reply_markup=reply_markup,
         )
-        return True
+        return SendResult.OK
     except Forbidden:
         log.warning("chat_id=%d blocked the bot — will unsubscribe", chat_id)
-        return False
+        return SendResult.BLOCKED
     except TelegramError as exc:
         log.error("Telegram error sending to chat_id=%d: %s", chat_id, exc)
-        return False
+        return SendResult.FAILED
 
 
 class Broadcaster:
@@ -92,7 +111,12 @@ class Broadcaster:
             return
 
         cutoff = self.cutoff(now)
-        classified = self.collect(cutoff)
+        # collect() is a synchronous scrape (blocking HTTP across ~18 mailing
+        # lists). Run it off the event loop so /start and button presses keep
+        # being serviced while it's in flight. Safe: collect() only touches
+        # self.source/self.filters, never self.store, so the Store's
+        # single-event-loop-owner assumption is untouched.
+        classified = await asyncio.to_thread(self.collect, cutoff)
         if not classified:
             log.info("No new threads to send.")
             return
@@ -122,7 +146,7 @@ class Broadcaster:
 
         header = format_header(len(new), datetime.now(timezone.utc))
         for chat_id in subscriber_ids:
-            if not await send_to(bot, chat_id, header):
+            if await send_to(bot, chat_id, header) is SendResult.BLOCKED:
                 blocked.add(chat_id)
 
         for i, item in enumerate(new, start=1):
@@ -132,7 +156,8 @@ class Broadcaster:
             for chat_id in subscriber_ids:
                 if chat_id in blocked:
                     continue
-                if not await send_to(bot, chat_id, text, reply_markup=markup):
+                result = await send_to(bot, chat_id, text, reply_markup=markup)
+                if result is SendResult.BLOCKED:
                     blocked.add(chat_id)
 
             log.debug("New thread #%d/%d done", i, len(new))
@@ -154,7 +179,8 @@ class Broadcaster:
             )
 
             for chat_id in follower_ids:
-                if not await send_to(bot, chat_id, text, reply_markup=markup):
+                result = await send_to(bot, chat_id, text, reply_markup=markup)
+                if result is SendResult.BLOCKED:
                     self.store.unfollow(thread_id, chat_id)
 
             await asyncio.sleep(_YIELD_SECONDS)
