@@ -139,7 +139,10 @@ class Broadcaster:
                     # mbox endpoint returns the whole thread for either id.
                     # Each was still fetched once (there is no way to know
                     # they collide before fetching), but only one copy may
-                    # reach classify(), or a shared follower would get the
+                    # reach classify(). _notify_followers unions followers
+                    # across every node of a thread, so if the same thread
+                    # reached classify() twice, every one of its followers --
+                    # whether following the root or a reply -- would get the
                     # same update notification twice.
                     continue
                 # classify() assumes every thread it is handed is already
@@ -197,7 +200,7 @@ class Broadcaster:
             return
 
         wanted = sorted(self.store.all_mailing_lists())
-        followed_ids = self.store.all_followed_threads()
+        followed_ids = sorted(self.store.all_followed_threads())
         if not wanted and not followed_ids:
             log.info(
                 "No subscriber wants any mailing list or follows any thread "
@@ -272,22 +275,37 @@ class Broadcaster:
 
     async def _notify_followers(self, bot, updated) -> None:
         for item in updated:
-            thread_id = item.thread.id
-            follower_ids = self.store.followers(thread_id)
-            if not follower_ids:
+            # A follow can be held on ANY node of the thread, not just the
+            # root: mbox.py can surface a node as a root that later turns
+            # out to be a reply once its true parent is archived, and a
+            # split thread has more than one root while Thread.id only
+            # names roots[0]. Walk every node and union their followers, so
+            # a follow on a reply id is not silently invisible. Track which
+            # node id(s) each chat actually follows, so a Forbidden prune
+            # below removes the real follow rather than a root id the chat
+            # may never have held.
+            ids_by_chat: dict[int, list[str]] = {}
+            for node in item.thread.walk():
+                for chat_id in self.store.followers(node.entry.id):
+                    ids_by_chat.setdefault(chat_id, []).append(node.entry.id)
+            if not ids_by_chat:
                 continue
 
             text = format_update_notification(item.thread)
-            markup = unfollow_keyboard(thread_id)
+            # The button always points at the root id: that's the id every
+            # other part of the UI (the digest's follow button, /following)
+            # treats as this thread's canonical identity.
+            markup = unfollow_keyboard(item.thread.id)
 
             log.info(
                 "Notifying %d follower(s) of updated thread: %s",
-                len(follower_ids), item.thread.title,
+                len(ids_by_chat), item.thread.title,
             )
 
-            for chat_id in follower_ids:
+            for chat_id, followed_ids in ids_by_chat.items():
                 result = await send_to(bot, chat_id, text, reply_markup=markup)
                 if result is SendResult.BLOCKED:
-                    self.store.unfollow(thread_id, chat_id)
+                    for followed_id in followed_ids:
+                        self.store.unfollow(followed_id, chat_id)
 
             await asyncio.sleep(_YIELD_SECONDS)

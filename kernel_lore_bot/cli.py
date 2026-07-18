@@ -112,7 +112,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.dry:
         broadcaster = Broadcaster(settings, store, source)
         cutoff = broadcaster.cutoff(datetime.now(timezone.utc))
-        print(format_dry_run(broadcaster.collect(cutoff, settings.mailing_lists), cutoff))
+        followed_ids = sorted(store.all_followed_threads())
+        print(
+            format_dry_run(
+                broadcaster.collect(cutoff, settings.mailing_lists, followed_ids), cutoff
+            )
+        )
         return 0
 
     log.info("Starting Telegram bot…")

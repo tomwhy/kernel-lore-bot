@@ -104,6 +104,9 @@ class _StubSource:
     def fetch_threads(self, since, mailing_lists):
         return list(self.threads)
 
+    def fetch_threads_by_id(self, ids):
+        return []
+
 
 def test_main_dry_run_does_not_crash_and_prints_the_report(monkeypatch, tmp_path, capsys):
     """

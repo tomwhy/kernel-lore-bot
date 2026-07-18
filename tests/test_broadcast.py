@@ -311,11 +311,74 @@ async def test_followers_are_notified_about_threads_outside_their_lists():
     store.follow("old@example.com", 1)
     store.block(1, "Alice Adams")
 
+    # count_entries_since(updated, cutoff) is 0 here (single node, root well
+    # before cutoff) yet this still notifies: it arrives via the LIST scrape
+    # (FakeSource(threads) below, i.e. source.fetch_threads), whose freshness
+    # is guaranteed for free by the atom feed's `since` filter, not the by-id
+    # path where collect() must check count_entries_since() itself.
     updated = _thread("old@example.com", NOW, mailing_lists={"netdev"}, root_age_hours=48)
     bot = FakeBot()
     await _broadcaster([updated], store).run(bot, now=NOW)
 
     assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+# -- following a non-root node id (finding 1) ------------------------
+#
+# store.followers(thread.id) only ever looked up the ROOT id. A subscriber
+# can hold a follow on a non-root node -- e.g. mbox.py treats an entry whose
+# In-Reply-To ref is absent from the mbox as a root, and it can later turn
+# out to be a reply once its parent is archived; or a thread can split into
+# multiple roots, of which Thread.id only names roots[0]. Either way, that
+# follower must still see the thread's updates.
+
+
+async def test_a_follower_of_a_reply_id_is_notified_when_the_thread_updates():
+    """A follow held on a non-root node id must still see the thread's updates."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_a_chat_following_both_root_and_reply_is_notified_only_once():
+    """One chat following two node ids of the same thread gets one message."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("root@x.com", 1)
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert len(bot.texts_to(1)) == 1
+
+
+async def test_forbidden_prunes_the_reply_follow_the_chat_actually_holds():
+    """
+    A chat that follows a reply id, not the root, must have that reply follow
+    removed on Forbidden -- unfollowing the root id (which it never held)
+    would leave the real follow in place and the chat would be retried on
+    every future run.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 5)
+    bot = FakeBot(fail_for={5})
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert store.followers("reply@x.com") == []
 
 
 # -- blocked authors --------------------------------------------------
@@ -494,11 +557,11 @@ async def test_a_failed_followed_fetch_does_not_affect_a_second_healthy_one():
 async def test_two_followed_ids_in_the_same_off_list_thread_notify_only_once():
     """
     Two different followed ids can resolve to the same off-list thread --
-    e.g. subscriber A follows the root, subscriber B follows one of its
-    replies, and the thread is on no list any subscriber wants. Each id is
-    looked up separately by Message-ID (lore's mbox endpoint returns the
-    whole thread for either), but only one copy may reach classify(), or a
-    shared follower gets the update notification twice.
+    e.g. one chat follows the root and also follows one of its replies, and
+    the thread is on no list any subscriber wants. Each id is looked up
+    separately by Message-ID (lore's mbox endpoint returns the whole thread
+    for either), but only one copy may reach classify(), or that chat gets
+    the update notification twice.
     """
     store = InMemoryStore()
     store.follow("root@x.com", 1)
@@ -540,6 +603,9 @@ async def test_the_scrape_runs_for_follows_even_with_no_lists():
     await b.run(FakeBot(), now=NOW)
 
     assert source.calls == [b.cutoff(NOW)]
+    # ... and the followed thread was actually fetched by id, not just that
+    # the list scrape's guard let the run proceed.
+    assert source.by_id_calls == [["f@x.com"]]
 
 
 # -- collect --------------------------------------------------------
