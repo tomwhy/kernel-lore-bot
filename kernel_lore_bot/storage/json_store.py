@@ -41,16 +41,35 @@ def _subscriber_from_json(
 ) -> Subscriber:
     """Build a Subscriber from one entry of the "subscribers" object.
 
-    A missing key means a v1 record, which predates the field: fall back to
-    the configured defaults so an existing subscriber's digest is unchanged
-    by the upgrade. An empty list is NOT missing — it means the subscriber
-    deliberately removed everything, and must survive a restart.
+    A missing key (or an explicit JSON null) means a v1 record, which
+    predates the field: fall back to the configured defaults so an existing
+    subscriber's digest is unchanged by the upgrade. An empty list is NOT
+    missing — it means the subscriber deliberately removed everything, and
+    must survive a restart.
+
+    Each of "follows"/"mailing_lists"/"blocked_authors", when present and
+    non-null, must be a JSON array. set() happily accepts any iterable, so a
+    stray scalar (e.g. a string) or an object would otherwise be silently
+    coerced into a bag of characters/keys instead of being rejected —
+    raising here lets the per-record guard in _load_state catch, log, and
+    skip just this one malformed record.
     """
+    follows = rec.get("follows")
     lists = rec.get("mailing_lists")
     blocks = rec.get("blocked_authors")
+    for key, value in (
+        ("follows", follows),
+        ("mailing_lists", lists),
+        ("blocked_authors", blocks),
+    ):
+        if value is not None and not isinstance(value, list):
+            raise ValueError(
+                f"subscriber {chat!r}: {key!r} must be a JSON array, got "
+                f"{type(value).__name__}: {value!r}"
+            )
     return Subscriber(
         chat_id=int(chat),
-        follows=set(rec.get("follows", [])),
+        follows=set(follows) if follows is not None else set(),
         mailing_lists=set(default_lists) if lists is None else set(lists),
         blocked_authors=set(default_blocks) if blocks is None else set(blocks),
     )
@@ -74,10 +93,21 @@ def _load_state(
         return {}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-        subs = [
-            _subscriber_from_json(chat, rec, default_lists, default_blocks)
-            for chat, rec in raw.get("subscribers", {}).items()
-        ]
+        subs: list[Subscriber] = []
+        for chat, rec in raw.get("subscribers", {}).items():
+            try:
+                subs.append(_subscriber_from_json(chat, rec, default_lists, default_blocks))
+            except (ValueError, AttributeError, TypeError) as exc:
+                # One malformed record (a non-iterable or otherwise bogus
+                # "mailing_lists"/"blocked_authors"/"follows") must not take
+                # every OTHER subscriber's valid follows down with it. Log
+                # loudly and skip just this record — the file itself is
+                # fine, so there is nothing to back up or rename here (see
+                # the file-level except below for that, separate, case).
+                log.error(
+                    "Could not parse subscriber %r in %s: %s — skipping",
+                    chat, path, exc,
+                )
         return {sub.chat_id: sub for sub in subs}
     except (json.JSONDecodeError, ValueError, AttributeError, TypeError) as exc:
         # The file exists but is unreadable (e.g. a crash landed the rename

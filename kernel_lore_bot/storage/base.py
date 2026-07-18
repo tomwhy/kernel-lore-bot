@@ -157,7 +157,13 @@ class BaseStore:
             self._flush()
 
     def follow(self, thread_id: str, chat_id: int) -> bool:
-        sub = self._subs.setdefault(chat_id, Subscriber(chat_id))
+        if chat_id not in self._subs:
+            self._subs[chat_id] = Subscriber(
+                chat_id,
+                mailing_lists=set(self._default_lists),
+                blocked_authors=set(self._default_blocks),
+            )
+        sub = self._subs[chat_id]
         if thread_id in sub.follows:
             return False
         sub.follows.add(thread_id)

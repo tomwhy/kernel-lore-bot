@@ -103,6 +103,17 @@ def test_new_subscriber_is_seeded_with_defaults():
     assert store.blocked_authors(1) == {"bot"}
 
 
+def test_follow_on_a_brand_new_chat_seeds_defaults_too():
+    """follow() must seed the same defaults add_subscriber() does — a user
+    who taps Follow before ever sending /start must not end up subscribed
+    with zero lists and silently receive nothing."""
+    store = InMemoryStore(default_lists=("netdev", "lkml"), default_blocks=("bot",))
+    store.follow("t1", 42)
+
+    assert store.mailing_lists(42) == {"netdev", "lkml"}
+    assert store.blocked_authors(42) == {"bot"}
+
+
 def test_seeded_defaults_are_not_shared_between_subscribers():
     store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)

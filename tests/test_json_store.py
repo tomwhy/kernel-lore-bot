@@ -159,7 +159,8 @@ def test_written_file_is_version_2_and_sorted(tmp_path):
 
 
 def test_explicitly_empty_lists_are_not_refilled_with_defaults(tmp_path):
-    """A subscriber who removed every list must stay empty across a restart."""
+    """A subscriber who removed every list/block must stay empty across a
+    restart, not have the configured defaults silently re-applied."""
     path = tmp_path / "state.json"
     path.write_text(
         json.dumps({
@@ -171,6 +172,81 @@ def test_explicitly_empty_lists_are_not_refilled_with_defaults(tmp_path):
         encoding="utf-8",
     )
 
-    store = JsonStore(path, default_lists=("netdev",))
+    store = JsonStore(path, default_lists=("netdev",), default_blocks=("bot",))
 
     assert store.mailing_lists(7) == set()
+    assert store.blocked_authors(7) == set()
+
+
+# -- finding 2: one malformed record must not discard every subscriber --
+
+
+def test_one_malformed_record_does_not_discard_the_others(tmp_path, caplog):
+    """A single record with a non-iterable mailing_lists must not take every
+    OTHER subscriber's valid follows down with it — only that one record is
+    skipped, and the file is left alone (no rename/backup)."""
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({
+            "version": 2,
+            "subscribers": {
+                "7": {
+                    "follows": ["bad@example.com"],
+                    "mailing_lists": 5,
+                    "blocked_authors": [],
+                },
+                "8": {
+                    "follows": ["good@example.com"],
+                    "mailing_lists": ["netdev"],
+                    "blocked_authors": [],
+                },
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.ERROR):
+        store = JsonStore(path)
+
+    assert store.subscribers() == {8}
+    assert store.followers("good@example.com") == [8]
+    assert store.followers("bad@example.com") == []
+
+    # The file itself was fine (valid JSON, our schema) — this is not the
+    # file-level corruption case, so nothing is renamed away.
+    assert path.exists()
+    assert list(tmp_path.glob("*.corrupt-*")) == []
+
+    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("7" in r.getMessage() for r in error_records)
+
+
+# -- finding 3: non-list scalars must be rejected, not silently coerced --
+
+
+def test_non_list_scalars_are_rejected_not_silently_coerced(tmp_path):
+    """set() accepts any iterable, so a stray string or object would
+    otherwise be silently coerced into a bag of characters/keys (e.g.
+    "netdev" -> {'n','e','t','d','v'}) instead of being rejected. Each
+    malformed record must be skipped rather than produce bogus subscriptions.
+    """
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({
+            "version": 2,
+            "subscribers": {
+                "1": {"follows": [], "mailing_lists": "netdev", "blocked_authors": []},
+                "2": {"follows": [], "mailing_lists": {"a": 1, "b": 2}, "blocked_authors": []},
+                "3": {"follows": [], "mailing_lists": [], "blocked_authors": True},
+                "9": {"follows": [], "mailing_lists": ["netdev"], "blocked_authors": []},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    store = JsonStore(path)
+
+    # Only the well-formed record survives; none of the malformed ones
+    # produced a silently-coerced bogus subscription.
+    assert store.subscribers() == {9}
+    assert store.mailing_lists(9) == {"netdev"}
