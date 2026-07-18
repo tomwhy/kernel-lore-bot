@@ -293,6 +293,19 @@ async def test_lists_add_is_case_insensitive():
     assert store.mailing_lists(1) == {"netdev"}
 
 
+async def test_lists_add_deduplicates_repeated_names_in_the_report():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "netdev", "netdev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == {"netdev"}
+    text = update.message.replies[0]["text"]
+    assert text.count("netdev") == 1
+
+
 async def test_lists_del_removes_and_warns_when_empty():
     store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
@@ -315,6 +328,19 @@ async def test_lists_del_does_not_validate_against_the_index():
     await _handlers(store).lists(update, context)
 
     assert store.mailing_lists(1) == set()
+
+
+async def test_lists_del_deduplicates_repeated_names_in_the_report():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["del", "netdev", "netdev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == set()
+    text = update.message.replies[0]["text"]
+    assert text.count("netdev") == 1
 
 
 async def test_lists_search_shows_matches():

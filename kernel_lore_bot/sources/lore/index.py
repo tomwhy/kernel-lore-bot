@@ -17,6 +17,7 @@ import json
 import logging
 import zlib
 from dataclasses import dataclass
+from difflib import get_close_matches
 from typing import Iterable
 
 from kernel_lore_bot.http import FetchError, HttpClient
@@ -81,6 +82,26 @@ class ListIndex:
         if not needle:
             return []
         return sorted(n for n in self.names if needle in n)[:limit]
+
+    def suggest(self, name: str, limit: int = 5) -> list[str]:
+        """
+        Did-you-mean candidates for an unknown name.
+
+        Substring matches come first — a user typing a partial name is common
+        and those matches are the most relevant. Only when that yields nothing
+        do we fall back to fuzzy matching, so a one-character typo (e.g.
+        "netdevv") still recovers a suggestion instead of a dead end.
+        """
+        substring_matches = self.search(name, limit=limit)
+        if substring_matches:
+            return substring_matches
+
+        needle = name.strip().lower()
+        if not needle:
+            return []
+        # sorted() makes the candidate order (and therefore any ties broken
+        # by get_close_matches) deterministic across runs.
+        return get_close_matches(needle, sorted(self.names), n=limit, cutoff=0.6)
 
 
 class ListRegistry:

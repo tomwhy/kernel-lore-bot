@@ -148,6 +148,9 @@ class Handlers:
         return f"🔍 <b>{len(matches)} match(es):</b>\n{shown}"
 
     def _add_lists(self, chat_id: int, names: list[str]) -> str:
+        # dict.fromkeys dedupes while preserving the order the user typed
+        # names in, so "add netdev netdev" reports netdev once, not twice.
+        names = list(dict.fromkeys(names))
         index = self.list_registry.index
         valid = [n for n in names if index.is_valid(n)]
         added = self.store.add_lists(chat_id, valid)
@@ -158,7 +161,7 @@ class Handlers:
             if not index.is_valid(name):
                 # Suggest rather than just rejecting: a typo and a half-
                 # remembered name look identical from here.
-                hints = index.search(name, limit=5)
+                hints = index.suggest(name, limit=5)
                 suffix = f" — did you mean {', '.join(hints)}?" if hints else ""
                 lines.append(f"❌ unknown list: <code>{safe}</code>{suffix}")
             elif name in added:
@@ -168,6 +171,8 @@ class Handlers:
         return "\n".join(lines)
 
     def _remove_lists(self, chat_id: int, names: list[str]) -> str:
+        # Same dedupe treatment as _add_lists, for the same reason.
+        names = list(dict.fromkeys(names))
         # Deliberately not validated against the index: a name already in
         # your state must be removable even if lore has since dropped it.
         removed = self.store.remove_lists(chat_id, names)

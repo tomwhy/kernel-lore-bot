@@ -133,6 +133,42 @@ def test_search_respects_the_limit():
     assert len(index.search("linux", limit=5)) == 5
 
 
+def test_suggest_falls_back_to_fuzzy_matching_for_a_typo():
+    index = ListIndex(frozenset({"netdev", "lkml", "linux-media", "linux-input"}))
+
+    assert index.suggest("netdevv") == ["netdev"]
+
+
+def test_suggest_prefers_substring_matches_over_fuzzy_ones():
+    index = ListIndex(frozenset({"linux-media", "linux-input", "netdev"}))
+
+    # "linux" is a substring of both linux-* names; fuzzy matching against
+    # the whole namespace could easily surface something else instead.
+    assert index.suggest("linux") == ["linux-input", "linux-media"]
+
+
+def test_suggest_returns_nothing_for_an_unrelated_string():
+    index = ListIndex(frozenset({"netdev", "lkml", "linux-media", "linux-input"}))
+
+    assert index.suggest("zzzzzzzz") == []
+
+
+def test_suggest_respects_the_limit():
+    # None of these contain "linux" as a substring, so this exercises the
+    # fuzzy fallback path rather than the substring path.
+    index = ListIndex(frozenset({f"linus{i}" for i in range(10)}))
+
+    assert len(index.suggest("linux", limit=3)) == 3
+
+
+def test_suggest_is_deterministic_across_runs():
+    index = ListIndex(frozenset({"netdev", "net-next", "netfilter", "networking"}))
+
+    first = index.suggest("net3work")
+    for _ in range(10):
+        assert index.suggest("net3work") == first
+
+
 def test_registry_starts_on_the_fallback(conftest_fake_client):
     client = conftest_fake_client({MANIFEST_URL: FetchError("lore is down")})
     registry = ListRegistry(client, BASE, fallback=("netdev",))
