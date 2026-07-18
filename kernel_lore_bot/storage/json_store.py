@@ -87,6 +87,12 @@ def _timestamped_backup_path(path: Path) -> Path:
     one just wrote, defeating the entire point of preserving it. Appending a
     numeric suffix until the name is free removes the collision instead of
     resolving it in favor of whichever call happens to run last.
+
+    This only avoids an existing name; it does not reserve the one it
+    returns. Calling it twice with no file written in between yields the
+    identical candidate both times. Safe today because every call site
+    writes the file synchronously, immediately after computing the path,
+    and the module docstring guarantees a single owner (no threads).
     """
     stem = path.name + "." + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
     candidate = path.with_name(stem)
@@ -165,7 +171,20 @@ def _load_state(
             # preserved — skip the copy instead of piling up duplicates.
             original_bytes = path.read_bytes()
             existing_backups = path.parent.glob(path.name + ".corrupt-*")
-            if any(b.read_bytes() == original_bytes for b in existing_backups):
+
+            def _same_content(backup: Path) -> bool:
+                # A sibling matching the glob is not guaranteed to be a
+                # readable file — it could be a directory, a broken
+                # symlink, or something permission-denied by the OS. Any
+                # OSError here means "can't prove a match", so fall through
+                # and let a fresh backup be written rather than letting one
+                # bad sibling abort the whole scan (and the bot's startup).
+                try:
+                    return backup.read_bytes() == original_bytes
+                except OSError:
+                    return False
+
+            if any(_same_content(b) for b in existing_backups):
                 log.error(
                     "Skipped %d of %d subscriber record(s) in %s — original "
                     "already preserved in an existing backup, not copying again",

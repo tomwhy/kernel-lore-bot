@@ -431,6 +431,49 @@ def test_repeated_restarts_with_same_bad_record_do_not_duplicate_the_backup(
     assert backups[0].read_text(encoding="utf-8") == original_text
 
 
+def test_unreadable_existing_backup_does_not_crash_the_store(tmp_path):
+    """The dedup comparison reads existing `.corrupt-*` siblings to decide
+    whether to skip writing a fresh backup. If one of those siblings cannot
+    be read (e.g. it is a directory rather than a file, from a stray mkdir
+    or manual tampering) the read must not propagate an OSError out of the
+    constructor and crash the bot at startup. An unreadable sibling must be
+    treated as "not a match" so the scan continues and a fresh backup is
+    still written."""
+    path = tmp_path / "state.json"
+    original_text = json.dumps({
+        "version": 2,
+        "subscribers": {
+            "7": {"follows": [], "mailing_lists": 5, "blocked_authors": []},
+            "8": {
+                "follows": ["good@example.com"],
+                "mailing_lists": ["netdev"],
+                "blocked_authors": [],
+            },
+        },
+    })
+    path.write_text(original_text, encoding="utf-8")
+
+    # Plant an unreadable ".corrupt-*" sibling that matches the dedup glob.
+    (tmp_path / "state.json.corrupt-20200101000000").mkdir()
+
+    store = JsonStore(path)
+
+    # (a) the store still loads the good records.
+    assert store.subscribers() == {8}
+    assert store.followers("good@example.com") == [8]
+
+    # (b) the live state.json is still present and usable.
+    assert path.exists()
+    assert json.loads(path.read_text(encoding="utf-8"))["subscribers"]["8"]["follows"] == [
+        "good@example.com"
+    ]
+
+    # (c) a fresh backup was written despite the unreadable sibling.
+    file_backups = [b for b in tmp_path.glob("state.json.corrupt-*") if b.is_file()]
+    assert len(file_backups) == 1
+    assert file_backups[0].read_text(encoding="utf-8") == original_text
+
+
 def test_partial_skip_backup_failure_does_not_crash_the_store(tmp_path, monkeypatch, caplog):
     """The `except OSError` around the partial-skip copy is what keeps the
     bot STARTING when the backup cannot be written (permissions, disk full,
