@@ -76,6 +76,27 @@ def _subscriber_from_json(
     )
 
 
+def _timestamped_backup_path(path: Path) -> Path:
+    """A `.corrupt-<UTC timestamp>` sibling of `path`, made collision-safe.
+
+    Two independent call sites in this module mint a backup name from this
+    same second-granularity timestamp: the file-level corrupt-rename path
+    (`os.replace`) and the partial-skip copy path (`shutil.copy2`). Within
+    the same second, both would otherwise compute the IDENTICAL name — and
+    whichever call lands second would silently destroy the backup the other
+    one just wrote, defeating the entire point of preserving it. Appending a
+    numeric suffix until the name is free removes the collision instead of
+    resolving it in favor of whichever call happens to run last.
+    """
+    stem = path.name + "." + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
+    candidate = path.with_name(stem)
+    counter = 1
+    while candidate.exists():
+        candidate = path.with_name(f"{stem}-{counter}")
+        counter += 1
+    return candidate
+
+
 def _subscriber_to_json(sub: Subscriber) -> dict:
     """The on-disk shape of one subscriber. Sorted so writes are stable."""
     return {
@@ -135,24 +156,36 @@ def _load_state(
             # the original bytes now, before that can happen. This is a
             # copy, not a rename: the live file must keep serving the
             # records that DID load.
-            backup = path.with_name(
-                path.name
-                + "."
-                + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
-            )
-            try:
-                shutil.copy2(path, backup)
+            #
+            # A bot that never reaches a mutation (a startup crash-loop, or
+            # simply no traffic) would otherwise copy the ENTIRE state file
+            # again on every single restart, even though the bad record
+            # never changes. If an existing backup already holds
+            # byte-identical content, the current file is already fully
+            # preserved — skip the copy instead of piling up duplicates.
+            original_bytes = path.read_bytes()
+            existing_backups = path.parent.glob(path.name + ".corrupt-*")
+            if any(b.read_bytes() == original_bytes for b in existing_backups):
                 log.error(
                     "Skipped %d of %d subscriber record(s) in %s — original "
-                    "preserved at %s",
-                    skipped, total, path, backup,
+                    "already preserved in an existing backup, not copying again",
+                    skipped, total, path,
                 )
-            except OSError as copy_exc:
-                log.error(
-                    "Skipped %d of %d subscriber record(s) in %s — AND "
-                    "could not back it up (%s)",
-                    skipped, total, path, copy_exc,
-                )
+            else:
+                backup = _timestamped_backup_path(path)
+                try:
+                    shutil.copy2(path, backup)
+                    log.error(
+                        "Skipped %d of %d subscriber record(s) in %s — original "
+                        "preserved at %s",
+                        skipped, total, path, backup,
+                    )
+                except OSError as copy_exc:
+                    log.error(
+                        "Skipped %d of %d subscriber record(s) in %s — AND "
+                        "could not back it up (%s)",
+                        skipped, total, path, copy_exc,
+                    )
 
         return {sub.chat_id: sub for sub in subs}
     except (json.JSONDecodeError, ValueError, AttributeError, TypeError) as exc:
@@ -161,9 +194,7 @@ def _load_state(
         # follow would be gone with only a warning to show for it. Preserve
         # the bytes under a timestamped backup name so the data stays
         # recoverable on disk, log loudly, and only then continue empty.
-        backup = path.with_name(
-            path.name + "." + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
-        )
+        backup = _timestamped_backup_path(path)
         try:
             os.replace(path, backup)
             log.error(

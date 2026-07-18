@@ -1,7 +1,9 @@
 import json
 import logging
+from datetime import datetime, timezone
 
 from kernel_lore_bot.storage import STATE_VERSION, JsonStore
+import kernel_lore_bot.storage.json_store as json_store_module
 
 
 def _state(tmp_path):
@@ -352,3 +354,126 @@ def test_non_list_scalars_are_rejected_not_silently_coerced(tmp_path):
     # produced a silently-coerced bogus subscription.
     assert store.subscribers() == {9}
     assert store.mailing_lists(9) == {"netdev"}
+
+
+# -- fix pass 3: collision-safe backups, no duplicate copies, copy2 failure --
+
+
+def test_backup_names_do_not_collide_within_the_same_second(tmp_path, monkeypatch):
+    """The file-level (os.replace) and partial-skip (shutil.copy2) backup
+    paths both mint a name from the same second-granularity timestamp. If a
+    partial-skip backup lands, and then — within the same second — a
+    genuinely corrupt file needs a file-level backup, the second write must
+    not silently overwrite the first backup's bytes."""
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 18, 12, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(json_store_module, "datetime", _FrozenDatetime)
+
+    path = tmp_path / "state.json"
+    partial_text = json.dumps({
+        "version": 2,
+        "subscribers": {
+            "7": {"follows": [], "mailing_lists": 5, "blocked_authors": []},
+            "8": {"follows": [], "mailing_lists": ["netdev"], "blocked_authors": []},
+        },
+    })
+    path.write_text(partial_text, encoding="utf-8")
+    JsonStore(path)  # partial-skip backup, via shutil.copy2
+
+    corrupt_bytes = b"{not json at all"
+    path.write_bytes(corrupt_bytes)
+    JsonStore(path)  # file-level backup, via os.replace, same frozen second
+
+    backups = sorted(tmp_path.glob("state.json.corrupt-*"))
+    assert len(backups) == 2, f"expected two distinct backups, got {backups}"
+    contents = {b.read_bytes() for b in backups}
+    assert partial_text.encode("utf-8") in contents
+    assert corrupt_bytes in contents
+
+
+def test_repeated_restarts_with_same_bad_record_do_not_duplicate_the_backup(
+    tmp_path, monkeypatch
+):
+    """A startup crash-loop, or simply an idle bot, restarts repeatedly
+    without ever reaching a mutation. Each restart must not re-copy the
+    ENTIRE state file when an existing backup already holds byte-identical
+    content — that's every subscriber's data duplicated on disk for no
+    reason, restart after restart."""
+    copy_calls = []
+    real_copy2 = json_store_module.shutil.copy2
+
+    def _tracking_copy2(src, dst):
+        copy_calls.append(dst)
+        return real_copy2(src, dst)
+
+    monkeypatch.setattr(json_store_module.shutil, "copy2", _tracking_copy2)
+
+    path = tmp_path / "state.json"
+    original_text = json.dumps({
+        "version": 2,
+        "subscribers": {
+            "7": {"follows": [], "mailing_lists": 5, "blocked_authors": []},
+            "8": {"follows": [], "mailing_lists": ["netdev"], "blocked_authors": []},
+        },
+    })
+    path.write_text(original_text, encoding="utf-8")
+
+    JsonStore(path)  # first restart: bad record still present, must back up
+    JsonStore(path)  # second restart: same bad record, must NOT back up again
+
+    assert len(copy_calls) == 1, "shutil.copy2 must only run once across both restarts"
+    backups = list(tmp_path.glob("state.json.corrupt-*"))
+    assert len(backups) == 1
+    assert backups[0].read_text(encoding="utf-8") == original_text
+
+
+def test_partial_skip_backup_failure_does_not_crash_the_store(tmp_path, monkeypatch, caplog):
+    """The `except OSError` around the partial-skip copy is what keeps the
+    bot STARTING when the backup cannot be written (permissions, disk full,
+    a read-only directory). It must log loudly and continue — a backup
+    failure must never take the bot down."""
+
+    def _raise_oserror(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(json_store_module.shutil, "copy2", _raise_oserror)
+
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({
+            "version": 2,
+            "subscribers": {
+                "7": {"follows": [], "mailing_lists": 5, "blocked_authors": []},
+                "8": {
+                    "follows": ["good@example.com"],
+                    "mailing_lists": ["netdev"],
+                    "blocked_authors": [],
+                },
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.ERROR):
+        store = JsonStore(path)
+
+    # (a) the store still loads the good records.
+    assert store.subscribers() == {8}
+    assert store.followers("good@example.com") == [8]
+
+    # (b) the live state.json is still present and usable.
+    assert path.exists()
+    assert json.loads(path.read_text(encoding="utf-8"))["subscribers"]["8"]["follows"] == [
+        "good@example.com"
+    ]
+
+    # No backup exists — the copy never succeeded.
+    assert list(tmp_path.glob("state.json.corrupt-*")) == []
+
+    # (c) an error is logged.
+    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("could not back it up" in r.getMessage() for r in error_records)
