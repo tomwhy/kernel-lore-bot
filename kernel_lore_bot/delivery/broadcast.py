@@ -1,8 +1,11 @@
 """
 The scrape-and-send job.
 
-New threads go to every subscriber; updated threads go only to the people who
-followed them. Chats that have blocked the bot are pruned as they are found.
+One scrape covers the union of every subscriber's mailing lists; each
+subscriber then gets only the threads whose lists intersect theirs and whose
+author they have not personally blocked. Followers of an updated thread are
+notified regardless of their lists or blocks. Chats that have blocked the bot
+are pruned as they are found.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ import asyncio
 import enum
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from telegram.error import Forbidden, TelegramError
 
@@ -26,8 +29,10 @@ from kernel_lore_bot.filters import BlockedAuthors
 from kernel_lore_bot.models import Classified, ThreadStatus
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.sources.base import Source
-from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import Store
+
+if TYPE_CHECKING:
+    from kernel_lore_bot.sources.lore.index import ListRegistry
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +85,7 @@ class Broadcaster:
         settings: Settings,
         store: Store,
         source: Source,
+        *,
         list_registry: Optional[ListRegistry] = None,
     ) -> None:
         self.settings = settings
@@ -195,9 +201,8 @@ class Broadcaster:
                 # threads — that reads like a bug to the person receiving it.
                 continue
 
-            if await send_to(bot, chat_id, format_header(len(visible), now)) is (
-                SendResult.BLOCKED
-            ):
+            result = await send_to(bot, chat_id, format_header(len(visible), now))
+            if result is SendResult.BLOCKED:
                 blocked.add(chat_id)
                 continue
 

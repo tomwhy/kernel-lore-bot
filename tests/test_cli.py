@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from kernel_lore_bot import cli
 from kernel_lore_bot.models import Classified, Entry, Node, Thread, ThreadStatus
 from kernel_lore_bot.settings import PLACEHOLDER_TOKEN, Settings
+from kernel_lore_bot.storage import InMemoryStore
 
 CUTOFF = datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc)
 
@@ -89,3 +90,35 @@ def test_build_components_makes_no_filters_when_none_configured(tmp_path):
     settings = Settings(state_dir=tmp_path, blocked_authors=())
     _, _, filters = cli.build_components(settings)
     assert filters == []
+
+
+# -- main(["--dry"]) --------------------------------------------------
+
+
+class _StubSource:
+    """No network I/O: fetch_threads just returns canned threads."""
+
+    def __init__(self, threads=()):
+        self.threads = list(threads)
+
+    def fetch_threads(self, since, mailing_lists):
+        return list(self.threads)
+
+
+def test_main_dry_run_does_not_crash_and_prints_the_report(monkeypatch, tmp_path, capsys):
+    """
+    Regression test: main(["--dry"]) used to pass the filters list positionally
+    into Broadcaster's list_registry parameter, which made collect() call
+    .refresh() on a plain list and raise AttributeError before any network
+    I/O. build_components is stubbed here so this test never touches the
+    network regardless.
+    """
+    monkeypatch.setattr(cli, "load_settings", lambda: Settings(state_dir=tmp_path))
+    monkeypatch.setattr(
+        cli,
+        "build_components",
+        lambda settings: (InMemoryStore(), _StubSource(), []),
+    )
+
+    assert cli.main(["--dry"]) == 0
+    assert "No new threads" in capsys.readouterr().out

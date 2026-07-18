@@ -110,7 +110,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     store, source, filters = build_components(settings)
 
     if args.dry:
-        broadcaster = Broadcaster(settings, store, source, filters)
+        broadcaster = Broadcaster(settings, store, source)
         cutoff = broadcaster.cutoff(datetime.now(timezone.utc))
         print(format_dry_run(broadcaster.collect(cutoff, settings.mailing_lists), cutoff))
         return 0
