@@ -82,76 +82,33 @@ def test_missing_state_file_starts_empty_with_no_backup(tmp_path):
     assert list(tmp_path.glob("*.corrupt-*")) == []
 
 
-def test_legacy_migration_still_works_after_the_corruption_fix(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[1, 2]", encoding="utf-8")
-    (tmp_path / "follows.json").write_text(json.dumps({"t1": [1, 2]}), encoding="utf-8")
-
-    store = JsonStore(tmp_path / "state.json")
-
-    assert store.subscribers() == {1, 2}
-    assert sorted(store.followers("t1")) == [1, 2]
-    assert list(tmp_path.glob("*.corrupt-*")) == []
-
-
 def test_write_leaves_no_temp_file_behind(tmp_path):
     store = JsonStore(tmp_path / "state.json")
     store.add_subscriber(1)
     assert [p.name for p in tmp_path.iterdir()] == ["state.json"]
 
 
-def test_migrates_both_legacy_files(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[1, 2]", encoding="utf-8")
-    (tmp_path / "follows.json").write_text(
-        json.dumps({"t1": [1, 2], "t2": [2]}), encoding="utf-8"
-    )
-
-    store = JsonStore(tmp_path / "state.json")
-    assert store.subscribers() == {1, 2}
-    assert sorted(store.followers("t1")) == [1, 2]
-    assert store.following_count(2) == 2
+# The legacy two-file format (subscribers.json + follows.json) is no longer
+# imported; its migration tests were removed along with _migrate_legacy.
 
 
-def test_migration_is_written_to_disk_immediately(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[1]", encoding="utf-8")
-    JsonStore(tmp_path / "state.json")
-    assert _state(tmp_path)["subscribers"] == {"1": {"follows": []}}
-
-
-def test_migration_leaves_legacy_files_in_place(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[1]", encoding="utf-8")
-    JsonStore(tmp_path / "state.json")
-    assert (tmp_path / "subscribers.json").exists()
-
-
-def test_migrates_subscribers_only(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[5]", encoding="utf-8")
-    store = JsonStore(tmp_path / "state.json")
-    assert store.subscribers() == {5}
-    assert store.following_count(5) == 0
-
-
-def test_migrates_follows_only_and_implies_subscription(tmp_path):
-    (tmp_path / "follows.json").write_text(json.dumps({"t1": [9]}), encoding="utf-8")
-    store = JsonStore(tmp_path / "state.json")
-    assert store.subscribers() == {9}
-    assert store.followers("t1") == [9]
-
-
-def test_no_legacy_files_means_empty_state(tmp_path):
+def test_legacy_files_are_ignored(tmp_path):
+    (tmp_path / "subscribers.json").write_text("[111]", encoding="utf-8")
+    (tmp_path / "follows.json").write_text(json.dumps({"t1": [111]}), encoding="utf-8")
     assert JsonStore(tmp_path / "state.json").subscribers() == set()
 
 
-def test_corrupt_legacy_follows_does_not_lose_subscribers(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[1]", encoding="utf-8")
-    (tmp_path / "follows.json").write_text("{broken", encoding="utf-8")
-    store = JsonStore(tmp_path / "state.json")
-    assert store.subscribers() == {1}
-
-
-def test_existing_state_file_wins_over_legacy_files(tmp_path):
-    (tmp_path / "subscribers.json").write_text("[111]", encoding="utf-8")
+def test_state_file_round_trips_through_subscriber(tmp_path):
     (tmp_path / "state.json").write_text(
-        json.dumps({"version": 1, "subscribers": {"222": {"follows": []}}}),
+        json.dumps({"version": 1, "subscribers": {"222": {"follows": ["t1", "t2"]}}}),
         encoding="utf-8",
     )
-    assert JsonStore(tmp_path / "state.json").subscribers() == {222}
+    store = JsonStore(tmp_path / "state.json")
+    assert store.subscribers() == {222}
+    assert store.following_count(222) == 2
+
+    store.add_subscriber(333)
+    assert _state(tmp_path)["subscribers"] == {
+        "222": {"follows": ["t1", "t2"]},
+        "333": {"follows": []},
+    }
