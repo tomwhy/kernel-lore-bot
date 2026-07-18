@@ -37,12 +37,16 @@ def fetch_list_names(
     """Every list name in lore's manifest. Raises FetchError or ListIndexError."""
     raw = client.get(f"{base_url.rstrip('/')}{MANIFEST_PATH}")
 
-    try:
-        raw = gzip.decompress(raw)
-    except gzip.BadGzipFile:
-        pass  # already decompressed; use the bytes as-is
-    except (EOFError, zlib.error) as exc:
-        raise ListIndexError(f"corrupt gzip manifest: {exc}") from exc
+    # Whether the body is gzip at all is decided by its magic bytes, not by
+    # which exception gzip.decompress happens to raise: a gzip-shaped body
+    # with a corrupted CRC32/length trailer (e.g. one flipped bit from a
+    # flaky mirror) also raises gzip.BadGzipFile, same as a body with no
+    # gzip header. Only the latter is "already decompressed" plaintext.
+    if raw[:2] == b"\x1f\x8b":
+        try:
+            raw = gzip.decompress(raw)
+        except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+            raise ListIndexError(f"corrupt gzip manifest: {exc}") from exc
 
     try:
         manifest = json.loads(raw.decode("utf-8", errors="replace"))
@@ -53,9 +57,9 @@ def fetch_list_names(
         raise ListIndexError(f"manifest is a {type(manifest).__name__}, expected object")
 
     names = {
-        key.strip("/").split("/")[0].lower()
+        key.strip().strip("/").split("/")[0].lower()
         for key in manifest
-        if key.strip("/")
+        if key.strip().strip("/")
     }
     if not names:
         raise ListIndexError("manifest contained no list names")

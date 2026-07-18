@@ -49,6 +49,32 @@ def test_real_fixture_parses(conftest_fake_client, fixture_bytes):
     assert "linux-media" in names
 
 
+def test_whitespace_only_key_is_filtered_out(conftest_fake_client):
+    """
+    A key of a single space has no slashes to strip, but strip("/") alone
+    leaves it as " " — dead whitespace data with no corresponding real list.
+    """
+    raw = gzip.compress(
+        json.dumps({" ": {}, "/lkml/git/0.git": {}}).encode()
+    )
+    client = conftest_fake_client({MANIFEST_URL: [raw]})
+
+    assert fetch_list_names(client, BASE) == frozenset({"lkml"})
+
+
+def test_degenerate_keys_never_produce_an_empty_list_name(conftest_fake_client):
+    """Keys of "/", "//", and "" must still be filtered out entirely."""
+    raw = gzip.compress(
+        json.dumps({"/": {}, "//": {}, "": {}, "/netdev/git/0.git": {}}).encode()
+    )
+    client = conftest_fake_client({MANIFEST_URL: [raw]})
+
+    names = fetch_list_names(client, BASE)
+
+    assert names == frozenset({"netdev"})
+    assert "" not in names
+
+
 def test_malformed_manifest_raises(conftest_fake_client):
     client = conftest_fake_client({MANIFEST_URL: [gzip.compress(b"not json")]})
 
@@ -61,6 +87,29 @@ def test_ungzipped_manifest_is_accepted(conftest_fake_client):
     client = conftest_fake_client({MANIFEST_URL: [json.dumps({"/rcu/git/0.git": {}}).encode()]})
 
     assert fetch_list_names(client, BASE) == frozenset({"rcu"})
+
+
+def test_gzip_with_bad_crc_trailer_raises_list_index_error(conftest_fake_client):
+    """
+    A gzip-shaped body (valid magic + header + deflate stream) whose CRC32/
+    length trailer is corrupted — e.g. one flipped bit from a flaky mirror —
+    must be reported as corrupt, not silently treated as plaintext.
+
+    gzip.decompress raises gzip.BadGzipFile for this ("Incorrect length of
+    data produced" / "CRC check failed"), the SAME exception it raises for a
+    body with no gzip magic at all. Distinguishing the two cases requires
+    checking the magic bytes, not catching BadGzipFile.
+    """
+    valid = gzip.compress(json.dumps({"/rcu/git/0.git": {}}).encode())
+    corrupted = bytearray(valid)
+    corrupted[-1] ^= 0xFF  # damage the trailing CRC32/size, not the header
+    corrupted = bytes(corrupted)
+    assert corrupted.startswith(b"\x1f\x8b")  # still gzip-shaped
+
+    client = conftest_fake_client({MANIFEST_URL: [corrupted]})
+
+    with pytest.raises(ListIndexError, match="corrupt gzip manifest"):
+        fetch_list_names(client, BASE)
 
 
 def test_is_valid_is_case_insensitive():
