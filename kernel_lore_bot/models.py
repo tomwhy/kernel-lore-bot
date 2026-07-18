@@ -58,10 +58,15 @@ class Thread:
 
     `roots` is normally exactly one node; more than one signals a split or
     malformed thread, which is kept rather than dropped.
+
+    `mailing_lists` holds every list the thread was seen on. One thread is
+    frequently cross-posted, and subscribers pick lists individually, so the
+    full set — not just whichever list surfaced it first — decides who
+    receives it.
     """
 
     roots: tuple[Node, ...]
-    mailing_list: str = ""
+    mailing_lists: frozenset[str] = frozenset()
 
     def walk(self) -> Iterator[Node]:
         for root in self.roots:

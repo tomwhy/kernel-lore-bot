@@ -16,7 +16,7 @@ from .conftest import FakeBot
 NOW = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
 
 
-def _thread(msg_id, updated, author="Alice Adams", mailing_list="netdev"):
+def _thread(msg_id, updated, author="Alice Adams", mailing_lists=frozenset({"netdev"})):
     entry = Entry(
         id=msg_id,
         title=f"[PATCH] {msg_id}",
@@ -25,7 +25,7 @@ def _thread(msg_id, updated, author="Alice Adams", mailing_list="netdev"):
         updated=updated,
         reply=None,
     )
-    return Thread(roots=(Node(entry=entry),), mailing_list=mailing_list)
+    return Thread(roots=(Node(entry=entry),), mailing_lists=frozenset(mailing_lists))
 
 
 class FakeSource:

@@ -145,7 +145,8 @@ def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Threa
             log.debug("Entry %s unreachable from any root — promoting to root", e.id)
             root_nodes.append(_build(e))
 
-    return Thread(roots=tuple(root_nodes), mailing_list=mailing_list)
+    lists = frozenset({mailing_list}) if mailing_list else frozenset()
+    return Thread(roots=tuple(root_nodes), mailing_lists=lists)
 
 
 def parse_thread(

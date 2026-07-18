@@ -16,7 +16,7 @@ def _classified(msg_id, status, updated=None):
         updated=updated or CUTOFF,
         reply=None,
     )
-    thread = Thread(roots=(Node(entry=entry),), mailing_list="netdev")
+    thread = Thread(roots=(Node(entry=entry),), mailing_lists=frozenset({"netdev"}))
     return Classified(thread=thread, status=status)
 
 

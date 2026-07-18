@@ -51,7 +51,7 @@ def test_fetches_thread_for_each_feed_entry(conftest_fake_client):
     )
     threads = list(_source(client).fetch_threads(SINCE))
     assert [t.id for t in threads] == ["a@x.com"]
-    assert threads[0].mailing_list == "linux-input"
+    assert threads[0].mailing_lists == frozenset({"linux-input"})
 
 
 def test_stops_paginating_at_an_entry_older_than_since(conftest_fake_client):

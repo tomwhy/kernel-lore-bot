@@ -26,7 +26,7 @@ def test_parse_thread_builds_a_single_root_tree(fixture_text):
     thread = mbox.parse_thread(fixture_text("thread_mt6392.mbox"), "linux-input")
     assert len(thread.roots) == 1
     assert thread.id == "20260621081634.467858-1-l.scorcia@gmail.com"
-    assert thread.mailing_list == "linux-input"
+    assert thread.mailing_lists == frozenset({"linux-input"})
 
 
 def test_parse_thread_nests_replies_under_their_parent(fixture_text):
