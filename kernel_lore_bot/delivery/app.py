@@ -39,7 +39,7 @@ def build_application(
     filters: Sequence[Filter] = (),
 ) -> Application:
     """Build the PTB application. Does not start it."""
-    broadcaster = Broadcaster(settings=settings, store=store, source=source, filters=filters)
+    broadcaster = Broadcaster(settings=settings, store=store, source=source)
     handlers = Handlers(settings=settings, store=store, on_scrape=broadcaster.run)
 
     async def set_command_menus(app: Application) -> None:

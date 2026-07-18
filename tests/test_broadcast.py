@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from telegram.error import BadRequest, Forbidden
 
 from kernel_lore_bot.delivery.broadcast import Broadcaster
-from kernel_lore_bot.filters import BlockedAuthors
 from kernel_lore_bot.models import Entry, Node, Thread
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.storage import InMemoryStore
@@ -16,7 +15,24 @@ from .conftest import FakeBot
 NOW = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
 
 
-def _thread(msg_id, updated, author="Alice Adams", mailing_lists=frozenset({"netdev"})):
+def _thread(
+    msg_id,
+    updated,
+    author="Alice Adams",
+    mailing_lists=frozenset({"netdev"}),
+    root_age_hours=None,
+):
+    """
+    Build a one-node thread.
+
+    `updated` is the root's timestamp. When `root_age_hours` is given, it
+    instead names how many hours *before* `updated` the root actually landed
+    — the one mechanism the whole file uses to build a thread that classifies
+    as UPDATED (root older than the cutoff). Existing callers that pass an
+    already-old `updated` directly keep working unchanged.
+    """
+    if root_age_hours is not None:
+        updated = updated - timedelta(hours=root_age_hours)
     entry = Entry(
         id=msg_id,
         title=f"[PATCH] {msg_id}",
@@ -38,12 +54,11 @@ class FakeSource:
         return list(self.threads)
 
 
-def _broadcaster(threads, store, filters=()):
+def _broadcaster(threads, store):
     return Broadcaster(
         settings=Settings(loopback_hours=4),
         store=store,
         source=FakeSource(threads),
-        filters=filters,
     )
 
 
@@ -56,8 +71,19 @@ async def test_no_subscribers_means_nothing_is_fetched():
     assert source.calls == []
 
 
-async def test_no_threads_means_nothing_is_sent():
+async def test_nothing_is_fetched_when_no_subscriber_wants_a_list():
     store = InMemoryStore()
+    store.add_subscriber(1)  # subscribed, but zero lists
+
+    source = FakeSource([])
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(FakeBot(), now=NOW)
+
+    assert source.calls == []
+
+
+async def test_no_threads_means_nothing_is_sent():
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
     await _broadcaster([], store).run(bot, now=NOW)
@@ -74,7 +100,7 @@ def test_cutoff_is_loopback_hours_before_now():
 # -- new threads ----------------------------------------------------
 
 async def test_new_thread_is_broadcast_to_every_subscriber():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     bot = FakeBot()
@@ -90,7 +116,7 @@ async def test_new_thread_is_broadcast_to_every_subscriber():
 
 
 async def test_new_thread_message_carries_a_follow_button():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -101,7 +127,7 @@ async def test_new_thread_message_carries_a_follow_button():
 
 
 async def test_thread_messages_are_sent_as_html_without_link_previews():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -111,10 +137,92 @@ async def test_thread_messages_are_sent_as_html_without_link_previews():
     assert bot.sent[1]["disable_web_page_preview"] is True
 
 
+# -- per-subscriber routing ------------------------------------------
+
+
+async def test_each_subscriber_gets_only_their_own_lists():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["rcu"])
+
+    threads = [
+        _thread("net@example.com", NOW, mailing_lists={"netdev"}),
+        _thread("rcu@example.com", NOW, mailing_lists={"rcu"}),
+    ]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert any("net@example.com" in t for t in bot.texts_to(1))
+    assert not any("rcu@example.com" in t for t in bot.texts_to(1))
+    assert any("rcu@example.com" in t for t in bot.texts_to(2))
+    assert not any("net@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_cross_posted_thread_reaches_both_subscribers():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["lkml"])
+
+    threads = [_thread("x@example.com", NOW, mailing_lists={"netdev", "lkml"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert any("x@example.com" in t for t in bot.texts_to(1))
+    assert any("x@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_personal_block_hides_a_thread_from_only_that_subscriber():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+    store.block(1, "kernel test robot")
+
+    threads = [_thread("bot@example.com", NOW, author="Kernel Test Robot")]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert bot.texts_to(1) == []
+    assert any("bot@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_subscriber_with_nothing_visible_gets_no_header():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["rcu"])
+
+    threads = [_thread("net@example.com", NOW, mailing_lists={"netdev"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert bot.texts_to(1) == []
+
+
+async def test_the_header_counts_only_what_that_subscriber_sees():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["netdev", "rcu"])
+
+    threads = [
+        _thread("net@example.com", NOW, mailing_lists={"netdev"}),
+        _thread("rcu@example.com", NOW, mailing_lists={"rcu"}),
+    ]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert "<b>1</b> new thread(s)" in bot.texts_to(1)[0]
+    assert "<b>2</b> new thread(s)" in bot.texts_to(2)[0]
+
+
 # -- updated threads ------------------------------------------------
 
 async def test_updated_thread_notifies_only_its_followers():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     store.follow("old@x.com", 2)
@@ -131,7 +239,7 @@ async def test_updated_thread_notifies_only_its_followers():
 
 
 async def test_updated_thread_with_no_followers_sends_nothing():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -141,7 +249,7 @@ async def test_updated_thread_with_no_followers_sends_nothing():
 
 
 async def test_no_digest_header_when_only_updated_threads_exist():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 1)
     bot = FakeBot()
 
@@ -150,20 +258,34 @@ async def test_no_digest_header_when_only_updated_threads_exist():
     assert not any("Kernel Lore Digest" in t for t in bot.texts_to(1))
 
 
-# -- filters --------------------------------------------------------
-
-async def test_blocked_authors_never_reach_subscribers():
+async def test_followers_are_notified_about_threads_outside_their_lists():
+    """An explicit follow outranks the follower's list and block settings."""
     store = InMemoryStore()
     store.add_subscriber(1)
+    store.add_lists(1, ["rcu"])
+    store.follow("old@example.com", 1)
+    store.block(1, "Alice Adams")
+
+    updated = _thread("old@example.com", NOW, mailing_lists={"netdev"}, root_age_hours=48)
+    bot = FakeBot()
+    await _broadcaster([updated], store).run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+# -- blocked authors --------------------------------------------------
+
+async def test_blocked_authors_never_reach_subscribers():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.block(1, "kernel test robot")
     bot = FakeBot()
 
     threads = [
         _thread("bot@x.com", NOW, author="kernel test robot"),
         _thread("human@x.com", NOW, author="Linus Torvalds"),
     ]
-    await _broadcaster(threads, store, filters=[BlockedAuthors(("kernel test robot",))]).run(
-        bot, now=NOW
-    )
+    await _broadcaster(threads, store).run(bot, now=NOW)
 
     body = "\n".join(bot.texts_to(1))
     assert "human@x.com" in body
@@ -174,7 +296,7 @@ async def test_blocked_authors_never_reach_subscribers():
 # -- blocked subscribers --------------------------------------------
 
 async def test_a_chat_that_blocked_the_bot_is_removed():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     store.follow("t1", 1)
@@ -187,7 +309,7 @@ async def test_a_chat_that_blocked_the_bot_is_removed():
 
 
 async def test_a_blocked_chat_is_not_retried_for_later_threads():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot(fail_for={1})
 
@@ -200,7 +322,7 @@ async def test_a_blocked_chat_is_not_retried_for_later_threads():
 
 
 async def test_a_follower_who_blocked_the_bot_is_unfollowed():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 5)
     bot = FakeBot(fail_for={5})
 
@@ -241,7 +363,7 @@ async def test_run_does_not_block_the_event_loop_during_collect():
             time.sleep(0.05)  # a real, blocking sleep — simulates requests.get()
             return []
 
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     b = Broadcaster(Settings(), store, SlowSource())
 
@@ -270,7 +392,7 @@ async def test_run_does_not_block_the_event_loop_during_collect():
 
 
 async def test_a_transient_telegram_error_does_not_unsubscribe():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     bot = FakeBot(error_for={1: BadRequest("oops")})
@@ -289,7 +411,7 @@ async def test_a_transient_telegram_error_does_not_unsubscribe():
 
 
 async def test_a_follower_transient_telegram_error_does_not_unfollow():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 5)
     bot = FakeBot(error_for={5: BadRequest("oops")})
 
@@ -321,7 +443,7 @@ async def test_concurrent_run_calls_do_not_interleave_their_scrapes():
             events.append("exit")
             return []
 
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     b = Broadcaster(Settings(), store, TrackingSource())
 
@@ -346,7 +468,7 @@ async def test_a_chat_that_stops_mid_scrape_receives_nothing():
     taken *before* collect() would still mail them the digest. The fix
     re-reads store.subscribers() after collect() returns.
     """
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
 
@@ -368,7 +490,7 @@ async def test_a_chat_that_stops_mid_scrape_receives_nothing():
 
 
 async def test_digest_header_uses_the_injected_now_not_wall_clock():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
     injected_now = datetime(2020, 1, 1, tzinfo=timezone.utc)

@@ -22,10 +22,11 @@ from kernel_lore_bot.delivery.formatting import (
 )
 from kernel_lore_bot.delivery.keyboards import follow_keyboard, unfollow_keyboard
 from kernel_lore_bot.digest import classify
-from kernel_lore_bot.filters import Filter, apply_filters
+from kernel_lore_bot.filters import BlockedAuthors
 from kernel_lore_bot.models import Classified, ThreadStatus
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.sources.base import Source
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import Store
 
 log = logging.getLogger(__name__)
@@ -79,12 +80,14 @@ class Broadcaster:
         settings: Settings,
         store: Store,
         source: Source,
-        filters: Sequence[Filter] = (),
+        list_registry: Optional[ListRegistry] = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.source = source
-        self.filters = list(filters)
+        # Refreshed inside collect(), which already runs off the event loop.
+        # Optional so a dry run can skip it.
+        self.list_registry = list_registry
         # Created lazily in run(), not here: Broadcaster is constructed in
         # cli.py before any event loop is running, and binding an
         # asyncio.Lock to "whatever loop happens to be current" at
@@ -96,16 +99,30 @@ class Broadcaster:
         return now - timedelta(hours=self.settings.loopback_hours)
 
     def collect(self, cutoff: datetime, mailing_lists: Sequence[str]) -> list[Classified]:
-        """Fetch, filter, and classify. No Telegram, no async."""
+        """
+        Fetch and classify. No Telegram, no async, no filtering.
+
+        Filtering is per-subscriber now (see visible_for), so it cannot happen
+        here — one scrape feeds differently-filtered digests.
+        """
+        if self.list_registry is not None:
+            self.list_registry.refresh()
         threads = list(self.source.fetch_threads(cutoff, mailing_lists))
-        kept = apply_filters(threads, self.filters)
-        if len(kept) < len(threads):
-            log.info(
-                "Filtered out %d thread(s) by blocklist (%d remaining)",
-                len(threads) - len(kept),
-                len(kept),
-            )
-        return classify(kept, cutoff)
+        return classify(threads, cutoff)
+
+    def visible_for(
+        self, chat_id: int, classified: Sequence[Classified]
+    ) -> list[Classified]:
+        """What this subscriber's lists and blocks leave them."""
+        lists = self.store.mailing_lists(chat_id)
+        if not lists:
+            return []
+        author_filter = BlockedAuthors(tuple(self.store.blocked_authors(chat_id)))
+        return [
+            item
+            for item in classified
+            if (item.thread.mailing_lists & lists) and author_filter.allows(item.thread)
+        ]
 
     async def run(self, bot, now: Optional[datetime] = None) -> None:
         # collect() now runs on a worker thread (see below), so the
@@ -127,21 +144,22 @@ class Broadcaster:
             log.info("No subscribers yet — nothing to send.")
             return
 
+        wanted = sorted(self.store.all_mailing_lists())
+        if not wanted:
+            log.info("No subscriber wants any mailing list — nothing to fetch.")
+            return
+
         cutoff = self.cutoff(now)
-        # collect() is a synchronous scrape (blocking HTTP across ~18 mailing
-        # lists). Run it off the event loop so /start and button presses keep
-        # being serviced while it's in flight. This is safe from corruption:
-        # collect() only touches self.source/self.filters, never self.store,
-        # so the Store's single-event-loop-owner assumption is untouched.
-        # But the offload deliberately opens a multi-minute window during
-        # which a subscriber can /stop, so the `subscriber_ids` snapshot
-        # taken above is stale by the time collect() returns — it is only
-        # used for the early "nothing to fetch" guard. The actual send below
-        # re-reads self.store.subscribers() so a chat that unsubscribed
-        # mid-scrape does not still receive the digest.
-        classified = await asyncio.to_thread(
-            self.collect, cutoff, self.settings.mailing_lists
-        )
+        # collect() is a synchronous scrape. Run it off the event loop so
+        # /start and button presses keep being serviced while it is in
+        # flight. This is safe from corruption: collect() only touches
+        # self.source and self.list_registry, never self.store, so the
+        # Store's single-event-loop-owner assumption is untouched. But the
+        # offload deliberately opens a multi-minute window during which a
+        # subscriber can /stop, so the snapshot above is stale by the time
+        # collect() returns — it is only used for the early guard. The send
+        # below re-reads self.store.subscribers().
+        classified = await asyncio.to_thread(self.collect, cutoff, wanted)
         if not classified:
             log.info("No new threads to send.")
             return
@@ -151,8 +169,8 @@ class Broadcaster:
 
         subscriber_ids = self.store.subscribers()
         log.info(
-            "Broadcast: %d new thread(s) to %d subscriber(s); "
-            "%d updated thread(s) → follower notifications",
+            "Broadcast: %d new thread(s) collected for %d subscriber(s) "
+            "(filtered per-subscriber); %d updated thread(s) → follower notifications",
             len(new), len(subscriber_ids), len(updated),
         )
 
@@ -170,23 +188,31 @@ class Broadcaster:
         if not new:
             return
 
-        header = format_header(len(new), now)
         for chat_id in subscriber_ids:
-            if await send_to(bot, chat_id, header) is SendResult.BLOCKED:
+            visible = self.visible_for(chat_id, new)
+            if not visible:
+                # Say nothing rather than sending a header announcing zero
+                # threads — that reads like a bug to the person receiving it.
+                continue
+
+            if await send_to(bot, chat_id, format_header(len(visible), now)) is (
+                SendResult.BLOCKED
+            ):
                 blocked.add(chat_id)
+                continue
 
-        for i, item in enumerate(new, start=1):
-            text = format_thread(item, cutoff)
-            markup = follow_keyboard(item.thread.id)
-
-            for chat_id in subscriber_ids:
-                if chat_id in blocked:
-                    continue
-                result = await send_to(bot, chat_id, text, reply_markup=markup)
+            for item in visible:
+                result = await send_to(
+                    bot,
+                    chat_id,
+                    format_thread(item, cutoff),
+                    reply_markup=follow_keyboard(item.thread.id),
+                )
                 if result is SendResult.BLOCKED:
                     blocked.add(chat_id)
+                    break
 
-            log.debug("New thread #%d/%d done", i, len(new))
+            log.debug("Digest sent to chat_id=%d (%d thread(s))", chat_id, len(visible))
             await asyncio.sleep(_YIELD_SECONDS)
 
     async def _notify_followers(self, bot, updated) -> None:
