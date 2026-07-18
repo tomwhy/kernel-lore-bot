@@ -327,6 +327,45 @@ def test_cross_posted_thread_carries_every_list(conftest_fake_client):
     assert len(mbox_calls) == 1
 
 
+def test_refetch_from_second_list_unions_lists_instead_of_overwriting(conftest_fake_client):
+    """
+    Regression: a reply that lands between list A's fetch and list B's feed
+    poll must not cause list B's re-fetch of the thread to drop list A's tag.
+
+    List A's feed surfaces only the thread root, and the mbox downloaded at
+    that point contains just the root. List B's feed surfaces a reply that
+    arrived later and was not present in that first mbox, so its message-id
+    is unseen and `_fetch_thread` runs again for it -- this time the mbox
+    includes both root and reply. The resulting single Thread must carry
+    both list names, not just the one from the second fetch.
+    """
+    other_feed = f"{BASE}/netdev/new.atom"
+    reply_mbox_text = _thread_mbox("root@x.com") + (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Bob Brown <bob@example.com>\n"
+        "Subject: Re: [PATCH] root\n"
+        "Date: Thu, 16 Jul 2026 15:30:00 +0000\n"
+        "Message-ID: <reply@x.com>\n"
+        "In-Reply-To: <root@x.com>\n"
+        "\n"
+        "reply body\n"
+    )
+    client = conftest_fake_client(
+        {
+            FEED: [_feed(("root@x.com", "2026-07-16T15:00:00Z")), _feed()],
+            other_feed: [_feed(("reply@x.com", "2026-07-16T15:30:00Z")), _feed()],
+            f"{BASE}/all/root@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("root@x.com"))],
+            f"{BASE}/all/reply@x.com/t.mbox.gz": [_mbox_gz(reply_mbox_text)],
+        }
+    )
+    source, lists = _source(client, lists=("linux-input", "netdev"))
+
+    threads = list(source.fetch_threads(SINCE, lists))
+
+    assert [t.id for t in threads] == ["root@x.com"]
+    assert threads[0].mailing_lists == frozenset({"linux-input", "netdev"})
+
+
 def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
     # DEFECT 11: a cut connection yields a truncated gzip. gzip.decompress raises
     # EOFError, which is neither BadGzipFile nor OSError, so the old

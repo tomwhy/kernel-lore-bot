@@ -4,7 +4,9 @@ LoreSource: the only Source implementation.
 Walks each given mailing list's `new.atom` backwards in time, and for every
 entry newer than the cutoff downloads that thread's full mbox and parses it
 into a Thread. Threads are deduplicated across lists by message-id, since one
-thread is frequently posted to several lists.
+thread is frequently posted to several lists, and a thread found on more than
+one list has its mailing list names unioned rather than the later fetch
+overwriting the earlier one.
 """
 
 from __future__ import annotations
@@ -85,6 +87,11 @@ class LoreSource:
                         seen[feed_entry.entry_id] = ""
                         continue
 
+                    existing = threads.get(thread.id)
+                    if existing is not None:
+                        thread = replace(
+                            thread, mailing_lists=existing.mailing_lists | thread.mailing_lists
+                        )
                     threads[thread.id] = thread
                     for node in thread.walk():
                         seen[node.entry.id] = thread.id

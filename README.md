@@ -50,7 +50,7 @@ The watched mailing lists and blocked authors are defaults in `settings.py`
 ## How it works
 
 ```
-LoreSource.fetch_threads(since)
+LoreSource.fetch_threads(since, mailing_lists)
     │
     ├─ GET /<list>/new.atom?t=…      paginate backwards until older than `since`
     ├─ GET /all/<msgid>/t.mbox.gz    one full thread per entry
@@ -111,7 +111,7 @@ tests/               pytest suite; fixtures/ holds real lore samples
   `cli.build_components`.
 - **A new command:** add an async method to `delivery/handlers.py` and register
   it in `delivery/app.py`.
-- **A new source:** implement `Source.fetch_threads(since) -> Iterable[Thread]`.
+- **A new source:** implement `Source.fetch_threads(since, mailing_lists) -> Iterable[Thread]`.
   Nothing downstream changes.
 
 ## Development
