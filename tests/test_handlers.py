@@ -386,3 +386,105 @@ async def test_lists_add_without_names_shows_usage():
     await _handlers(store).lists(update, context)
 
     assert "/lists add" in update.message.replies[0]["text"]
+
+
+# -- /filters -----------------------------------------------------------
+
+
+async def test_filters_requires_a_subscription():
+    store = InMemoryStore()
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+
+    await _handlers(store).filters(update, context)
+
+    assert "/start" in update.message.replies[0]["text"]
+
+
+async def test_bare_filters_lists_current_blocks():
+    store = InMemoryStore(default_blocks=("kernel test robot",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = []
+
+    await _handlers(store).filters(update, context)
+
+    assert "kernel test robot" in update.message.replies[0]["text"]
+
+
+async def test_filters_block_takes_the_whole_remainder_as_one_name():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "Kernel", "Test", "Robot"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == {"Kernel Test Robot"}
+
+
+async def test_filters_block_reports_a_duplicate():
+    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "kernel", "test", "robot"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == {"Kernel Test Robot"}
+    assert "already" in update.message.replies[0]["text"].lower()
+
+
+async def test_filters_unblock_removes_case_insensitively():
+    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["unblock", "KERNEL", "TEST", "ROBOT"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == set()
+    assert "✅" in update.message.replies[0]["text"]
+
+
+async def test_filters_unblock_reports_a_miss():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["unblock", "nobody"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "ℹ️" in update.message.replies[0]["text"]
+
+
+async def test_filters_block_without_a_name_shows_usage():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "/filters block" in update.message.replies[0]["text"]
+
+
+async def test_filters_rejects_an_unknown_subcommand():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["frobnicate", "someone"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "/filters block" in update.message.replies[0]["text"]
+
+
+async def test_filters_escapes_html_in_an_author_name():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "<b>evil</b>"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "&lt;b&gt;evil&lt;/b&gt;" in update.message.replies[0]["text"]

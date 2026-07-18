@@ -30,6 +30,14 @@ LISTS_USAGE = (
     "<code>/lists search &lt;query&gt;</code>"
 )
 
+FILTERS_USAGE = (
+    "<code>/filters</code> — your blocked authors\n"
+    "<code>/filters block &lt;name&gt;</code>\n"
+    "<code>/filters unblock &lt;name&gt;</code>\n\n"
+    "<i>Matching is case-insensitive and partial: blocking "
+    "<code>robot</code> mutes “Kernel Test Robot”.</i>"
+)
+
 WELCOME_TEXT = (
     "👋 <b>Welcome to Kernel Lore Bot!</b>\n\n"
     "You'll receive a daily digest of <b>new</b> Linux kernel mailing list threads.\n\n"
@@ -191,6 +199,54 @@ class Handlers:
                 "digest until you add one."
             )
         return "\n".join(lines)
+
+    async def filters(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id
+        if not self._subscribed(chat_id):
+            await update.message.reply_text(
+                "❌ You are not subscribed. Send /start first."
+            )
+            return
+
+        args = list(context.args or [])
+        if not args:
+            await update.message.reply_html(self._render_blocks(chat_id))
+            return
+
+        action = args[0].lower()
+        # Unlike a list name, an author name contains spaces — take the whole
+        # remainder as one name rather than splitting it.
+        name = " ".join(args[1:]).strip()
+
+        if action == "block" and name:
+            await update.message.reply_html(self._block_author(chat_id, name))
+        elif action == "unblock" and name:
+            await update.message.reply_html(self._unblock_author(chat_id, name))
+        else:
+            await update.message.reply_html(FILTERS_USAGE)
+
+    # -- /filters helpers ------------------------------------------------
+
+    def _render_blocks(self, chat_id: int) -> str:
+        current = sorted(self.store.blocked_authors(chat_id))
+        if not current:
+            body = "🔇 You have <b>no blocked authors</b>."
+        else:
+            shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in current)
+            body = f"🔇 <b>Blocked authors ({len(current)}):</b>\n{shown}"
+        return f"{body}\n\n{FILTERS_USAGE}"
+
+    def _block_author(self, chat_id: int, name: str) -> str:
+        safe = html.escape(name)
+        if self.store.block(chat_id, name):
+            return f"✅ Blocked <code>{safe}</code> — their threads will be hidden."
+        return f"ℹ️ You already block <code>{safe}</code>."
+
+    def _unblock_author(self, chat_id: int, name: str) -> str:
+        safe = html.escape(name)
+        if self.store.unblock(chat_id, name):
+            return f"✅ Unblocked <code>{safe}</code>."
+        return f"ℹ️ You were not blocking <code>{safe}</code>."
 
     async def scrape(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_chat.id
