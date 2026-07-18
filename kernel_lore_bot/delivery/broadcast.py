@@ -14,7 +14,7 @@ import asyncio
 import enum
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import TYPE_CHECKING, Iterable, Optional, Sequence
 
 from telegram.error import Forbidden, TelegramError
 
@@ -24,7 +24,7 @@ from kernel_lore_bot.delivery.formatting import (
     format_update_notification,
 )
 from kernel_lore_bot.delivery.keyboards import follow_keyboard, unfollow_keyboard
-from kernel_lore_bot.digest import classify
+from kernel_lore_bot.digest import classify, count_entries_since
 from kernel_lore_bot.filters import BlockedAuthors
 from kernel_lore_bot.models import Classified, ThreadStatus
 from kernel_lore_bot.settings import Settings
@@ -104,16 +104,62 @@ class Broadcaster:
         now = now or datetime.now(timezone.utc)
         return now - timedelta(hours=self.settings.loopback_hours)
 
-    def collect(self, cutoff: datetime, mailing_lists: Sequence[str]) -> list[Classified]:
+    def collect(
+        self,
+        cutoff: datetime,
+        mailing_lists: Sequence[str],
+        followed_ids: Iterable[str] = (),
+    ) -> list[Classified]:
         """
         Fetch and classify. No Telegram, no async, no filtering.
 
         Filtering is per-subscriber now (see visible_for), so it cannot happen
         here — one scrape feeds differently-filtered digests.
+
+        `followed_ids` is fetched separately, by Message-ID, and merged in —
+        see the class docstring's explanation of why an explicit follow beats
+        list membership. A followed id already reached by the list scrape (as
+        a root or as a reply — checked against every node, not just roots) is
+        not refetched: that thread is already in `threads` with its real
+        mailing_lists, which is exactly what a merge would produce anyway.
         """
         if self.list_registry is not None:
             self.list_registry.refresh()
         threads = list(self.source.fetch_threads(cutoff, mailing_lists))
+
+        covered = {node.entry.id for thread in threads for node in thread.walk()}
+        ids_to_fetch = [tid for tid in dict.fromkeys(followed_ids) if tid not in covered]
+        if ids_to_fetch:
+            merged_ids: set[str] = set()
+            for thread in self.source.fetch_threads_by_id(ids_to_fetch):
+                if thread.id in merged_ids:
+                    # Two different followed ids can resolve to the same
+                    # off-list thread -- e.g. one subscriber follows the
+                    # root and another follows one of its replies, and lore's
+                    # mbox endpoint returns the whole thread for either id.
+                    # Each was still fetched once (there is no way to know
+                    # they collide before fetching), but only one copy may
+                    # reach classify(), or a shared follower would get the
+                    # same update notification twice.
+                    continue
+                # classify() assumes every thread it is handed is already
+                # known to have activity at/after cutoff — a guarantee
+                # fetch_threads gets for free from the atom feed's `since`
+                # filter (it only ever surfaces entries >= since). A by-id
+                # fetch has no such filter: it downloads the whole mbox
+                # unconditionally, so most followed threads on most runs will
+                # have nothing new. Without this check, classify() would
+                # still label a followed thread UPDATED purely because its
+                # root predates the cutoff, and _notify_followers would spam
+                # every follower on every single scrape regardless of
+                # whether anything happened. This is the one caller that can
+                # break classify()'s "already fresh" assumption on its own,
+                # so it is the one place that must restore it — classify()
+                # itself keeps its existing, simpler contract unchanged.
+                if count_entries_since(thread, cutoff) > 0:
+                    threads.append(thread)
+                    merged_ids.add(thread.id)
+
         return classify(threads, cutoff)
 
     def visible_for(
@@ -151,8 +197,12 @@ class Broadcaster:
             return
 
         wanted = sorted(self.store.all_mailing_lists())
-        if not wanted:
-            log.info("No subscriber wants any mailing list — nothing to fetch.")
+        followed_ids = self.store.all_followed_threads()
+        if not wanted and not followed_ids:
+            log.info(
+                "No subscriber wants any mailing list or follows any thread "
+                "— nothing to fetch."
+            )
             return
 
         cutoff = self.cutoff(now)
@@ -165,7 +215,7 @@ class Broadcaster:
         # subscriber can /stop, so the snapshot above is stale by the time
         # collect() returns — it is only used for the early guard. The send
         # below re-reads self.store.subscribers().
-        classified = await asyncio.to_thread(self.collect, cutoff, wanted)
+        classified = await asyncio.to_thread(self.collect, cutoff, wanted, followed_ids)
         if not classified:
             log.info("No new threads to send.")
             return

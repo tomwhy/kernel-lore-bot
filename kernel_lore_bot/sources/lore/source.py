@@ -16,7 +16,7 @@ import logging
 import zlib
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from typing import Iterator, Optional, Sequence
+from typing import Iterable, Iterator, Optional, Sequence
 
 from kernel_lore_bot.http import FetchError, HttpClient
 from kernel_lore_bot.models import Thread
@@ -97,6 +97,26 @@ class LoreSource:
                         seen[node.entry.id] = thread.id
 
         return list(threads.values())
+
+    def fetch_threads_by_id(self, ids: Iterable[str]) -> list[Thread]:
+        """
+        Fetch each given Message-ID as its own thread, by id rather than by
+        feed. No `since` filter -- every id is downloaded unconditionally.
+
+        Used for a subscriber's followed threads, which may lie outside
+        every mailing list any subscriber currently wants (see
+        Broadcaster.collect). `list_name=""` means the resulting Thread's
+        mailing_lists is always frozenset() -- a thread reached this way has
+        no known list, and does not need one: followers bypass visible_for
+        entirely. A fetch that fails is skipped (already logged by
+        _fetch_thread) rather than aborting the rest.
+        """
+        threads = []
+        for entry_id in ids:
+            thread = self._fetch_thread(entry_id, "")
+            if thread is not None:
+                threads.append(thread)
+        return threads
 
     # -- internals ----------------------------------------------------
 

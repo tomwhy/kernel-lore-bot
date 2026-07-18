@@ -386,3 +386,48 @@ def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
     )
     source, lists = _source(client)
     assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]
+
+
+# -- fetch_threads_by_id (task 6b) -----------------------------------
+
+
+def test_fetch_threads_by_id_fetches_each_id_by_message_id(conftest_fake_client):
+    client = conftest_fake_client(
+        {
+            f"{BASE}/all/a@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("a@x.com"))],
+            f"{BASE}/all/b@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("b@x.com"))],
+        }
+    )
+    source, _ = _source(client)
+    threads = source.fetch_threads_by_id(["a@x.com", "b@x.com"])
+    assert sorted(t.id for t in threads) == ["a@x.com", "b@x.com"]
+
+
+def test_fetch_threads_by_id_has_no_mailing_list(conftest_fake_client):
+    # A thread reached by id, not by feed, has no known list -- followers
+    # bypass visible_for entirely, so it does not need one.
+    client = conftest_fake_client(
+        {f"{BASE}/all/a@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("a@x.com"))]}
+    )
+    source, _ = _source(client)
+    threads = source.fetch_threads_by_id(["a@x.com"])
+    assert threads[0].mailing_lists == frozenset()
+
+
+def test_fetch_threads_by_id_skips_a_failed_fetch_but_not_the_rest(conftest_fake_client):
+    client = conftest_fake_client(
+        {
+            f"{BASE}/all/dead@x.com/t.mbox.gz": FetchError("gone"),
+            f"{BASE}/all/alive@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("alive@x.com"))],
+        }
+    )
+    source, _ = _source(client)
+    threads = source.fetch_threads_by_id(["dead@x.com", "alive@x.com"])
+    assert [t.id for t in threads] == ["alive@x.com"]
+
+
+def test_fetch_threads_by_id_of_nothing_makes_no_requests(conftest_fake_client):
+    client = conftest_fake_client({})
+    source, _ = _source(client)
+    assert source.fetch_threads_by_id([]) == []
+    assert client.calls == []

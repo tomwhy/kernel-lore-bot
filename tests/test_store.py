@@ -176,3 +176,22 @@ def test_all_mailing_lists_is_the_union_across_subscribers():
 
 def test_all_mailing_lists_is_empty_with_no_subscribers():
     assert InMemoryStore(default_lists=("netdev",)).all_mailing_lists() == set()
+
+
+def test_all_followed_threads_is_the_union_across_subscribers(store):
+    store.follow("t1", 1)
+    store.follow("t2", 2)
+    store.follow("t1", 2)  # shared with chat 1 -- must not appear twice
+
+    assert store.all_followed_threads() == {"t1", "t2"}
+
+
+def test_all_followed_threads_is_empty_with_no_follows(store):
+    store.add_subscriber(1)
+    assert store.all_followed_threads() == set()
+
+
+def test_all_followed_threads_drops_an_id_once_its_last_follower_unfollows(store):
+    store.follow("t1", 1)
+    store.unfollow("t1", 1)
+    assert store.all_followed_threads() == set()

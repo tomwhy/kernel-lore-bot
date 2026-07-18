@@ -46,6 +46,7 @@ class Store(Protocol):
     def block(self, chat_id: int, name: str) -> bool: ...
     def unblock(self, chat_id: int, name: str) -> bool: ...
     def all_mailing_lists(self) -> set[str]: ...
+    def all_followed_threads(self) -> set[str]: ...
 
 
 class BaseStore:
@@ -111,6 +112,17 @@ class BaseStore:
         for sub in self._subs.values():
             union |= sub.mailing_lists
         return union
+
+    def all_followed_threads(self) -> set[str]:
+        """Every thread id at least one subscriber follows -- the by-id
+        scrape's scope.
+
+        `self._index` is already keyed on exactly this set (follow/unfollow/
+        remove_subscriber(s) keep it in sync, dropping a key once its
+        follower set is empty), so this returns its keys directly rather
+        than rescanning `self._subs` the way all_mailing_lists() does.
+        """
+        return set(self._index)
 
     # -- writes --------------------------------------------------------
 
