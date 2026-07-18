@@ -8,6 +8,7 @@ register them in app.py.
 
 from __future__ import annotations
 
+import html
 import logging
 from typing import Awaitable, Callable, Optional
 
@@ -17,9 +18,17 @@ from telegram.ext import ContextTypes
 
 from kernel_lore_bot.delivery.keyboards import follow_keyboard, unfollow_keyboard, parse_callback
 from kernel_lore_bot.settings import Settings
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import Store
 
 log = logging.getLogger(__name__)
+
+LISTS_USAGE = (
+    "<code>/lists</code> — your lists\n"
+    "<code>/lists add &lt;name&gt; …</code>\n"
+    "<code>/lists del &lt;name&gt; …</code>\n"
+    "<code>/lists search &lt;query&gt;</code>"
+)
 
 WELCOME_TEXT = (
     "👋 <b>Welcome to Kernel Lore Bot!</b>\n\n"
@@ -40,10 +49,12 @@ class Handlers:
         self,
         settings: Settings,
         store: Store,
+        list_registry: ListRegistry,
         on_scrape: Optional[Callable[[object], Awaitable[None]]] = None,
     ) -> None:
         self.settings = settings
         self.store = store
+        self.list_registry = list_registry
         self._on_scrape = on_scrape
 
     # -- commands ------------------------------------------------------
@@ -88,6 +99,93 @@ class Handlers:
             f"✅ You are subscribed to the daily kernel digest.\n"
             f"🔔 Following <b>{self.store.following_count(chat_id)}</b> thread(s) for updates."
         )
+
+    def _subscribed(self, chat_id: int) -> bool:
+        return chat_id in self.store.subscribers()
+
+    async def lists(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id
+        if not self._subscribed(chat_id):
+            await update.message.reply_text(
+                "❌ You are not subscribed. Send /start first."
+            )
+            return
+
+        args = list(context.args or [])
+        if not args:
+            await update.message.reply_html(self._render_lists(chat_id))
+            return
+
+        action, names = args[0].lower(), [a.lower() for a in args[1:]]
+
+        if action == "search":
+            await update.message.reply_html(self._render_search(" ".join(names)))
+        elif action == "add" and names:
+            await update.message.reply_html(self._add_lists(chat_id, names))
+        elif action == "del" and names:
+            await update.message.reply_html(self._remove_lists(chat_id, names))
+        else:
+            await update.message.reply_html(LISTS_USAGE)
+
+    # -- /lists helpers ------------------------------------------------
+
+    def _render_lists(self, chat_id: int) -> str:
+        current = sorted(self.store.mailing_lists(chat_id))
+        if not current:
+            body = "📭 You have <b>no lists</b> — you will not receive a digest."
+        else:
+            shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in current)
+            body = f"📬 <b>Your lists ({len(current)}):</b>\n{shown}"
+        return f"{body}\n\n{LISTS_USAGE}"
+
+    def _render_search(self, query: str) -> str:
+        if not query:
+            return LISTS_USAGE
+        matches = self.list_registry.index.search(query)
+        if not matches:
+            return f"🔍 No lists match <code>{html.escape(query)}</code>."
+        shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in matches)
+        return f"🔍 <b>{len(matches)} match(es):</b>\n{shown}"
+
+    def _add_lists(self, chat_id: int, names: list[str]) -> str:
+        index = self.list_registry.index
+        valid = [n for n in names if index.is_valid(n)]
+        added = self.store.add_lists(chat_id, valid)
+
+        lines = []
+        for name in names:
+            safe = html.escape(name)
+            if not index.is_valid(name):
+                # Suggest rather than just rejecting: a typo and a half-
+                # remembered name look identical from here.
+                hints = index.search(name, limit=5)
+                suffix = f" — did you mean {', '.join(hints)}?" if hints else ""
+                lines.append(f"❌ unknown list: <code>{safe}</code>{suffix}")
+            elif name in added:
+                lines.append(f"✅ added <code>{safe}</code>")
+            else:
+                lines.append(f"ℹ️ already subscribed to <code>{safe}</code>")
+        return "\n".join(lines)
+
+    def _remove_lists(self, chat_id: int, names: list[str]) -> str:
+        # Deliberately not validated against the index: a name already in
+        # your state must be removable even if lore has since dropped it.
+        removed = self.store.remove_lists(chat_id, names)
+
+        lines = []
+        for name in names:
+            safe = html.escape(name)
+            if name in removed:
+                lines.append(f"✅ removed <code>{safe}</code>")
+            else:
+                lines.append(f"ℹ️ you were not subscribed to <code>{safe}</code>")
+
+        if not self.store.mailing_lists(chat_id):
+            lines.append(
+                "\n📭 You now have <b>no lists</b> — you will not receive a "
+                "digest until you add one."
+            )
+        return "\n".join(lines)
 
     async def scrape(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_chat.id

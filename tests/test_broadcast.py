@@ -9,9 +9,10 @@ from kernel_lore_bot.delivery.broadcast import Broadcaster
 from kernel_lore_bot.delivery.handlers import Handlers
 from kernel_lore_bot.models import Entry, Node, Reply, Thread
 from kernel_lore_bot.settings import Settings
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import InMemoryStore
 
-from .conftest import FakeBot, FakeContext, FakeUpdate
+from .conftest import FakeBot, FakeContext, FakeHttpClient, FakeUpdate
 
 NOW = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
 
@@ -389,7 +390,11 @@ async def test_unfollow_button_for_a_reply_only_follower_carries_the_reply_id():
     callback_data = markup.inline_keyboard[0][0].callback_data
     assert callback_data == "unfollow:reply@x.com"
 
-    handlers = Handlers(settings=Settings(), store=store)
+    handlers = Handlers(
+        settings=Settings(),
+        store=store,
+        list_registry=ListRegistry(FakeHttpClient({}), "https://lore.example.org"),
+    )
     update = FakeUpdate(chat_id=1, callback_data=callback_data)
     context = FakeContext()
     await handlers.on_button(update, context)

@@ -4,7 +4,24 @@ from kernel_lore_bot.delivery.handlers import Handlers
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.storage import InMemoryStore
 
-from .conftest import FakeContext, FakeUpdate
+from .conftest import FakeContext, FakeHttpClient, FakeUpdate
+
+
+def _registry(names=("netdev", "lkml", "linux-media", "linux-input")):
+    """A ListRegistry whose fallback is the whole index — no fetch needed."""
+    from kernel_lore_bot.sources.lore.index import ListRegistry
+
+    client = FakeHttpClient({})  # every refresh fails; the fallback stands
+    return ListRegistry(client, "https://lore.example.org", fallback=names)
+
+
+def _handlers(store, settings=None, on_scrape=None):
+    return Handlers(
+        settings=settings or Settings(),
+        store=store,
+        list_registry=_registry(),
+        on_scrape=on_scrape,
+    )
 
 
 @pytest.fixture
@@ -14,7 +31,7 @@ def store():
 
 @pytest.fixture
 def handlers(store):
-    return Handlers(settings=Settings(admin_chat_id=99), store=store)
+    return _handlers(store, settings=Settings(admin_chat_id=99))
 
 
 # -- /start ---------------------------------------------------------
@@ -80,7 +97,7 @@ async def test_scrape_is_rejected_for_non_admins(store):
     async def on_scrape(bot):
         called.append(bot)
 
-    handlers = Handlers(Settings(admin_chat_id=99), store, on_scrape=on_scrape)
+    handlers = _handlers(store, settings=Settings(admin_chat_id=99), on_scrape=on_scrape)
     update = FakeUpdate(chat_id=1)
     await handlers.scrape(update, FakeContext())
     assert called == []
@@ -93,7 +110,7 @@ async def test_scrape_runs_for_the_admin(store):
     async def on_scrape(bot):
         called.append(bot)
 
-    handlers = Handlers(Settings(admin_chat_id=99), store, on_scrape=on_scrape)
+    handlers = _handlers(store, settings=Settings(admin_chat_id=99), on_scrape=on_scrape)
     update = FakeUpdate(chat_id=99)
     await handlers.scrape(update, FakeContext())
     assert len(called) == 1
@@ -105,7 +122,7 @@ async def test_scrape_reports_failure_without_raising(store):
     async def on_scrape(bot):
         raise RuntimeError("lore is down")
 
-    handlers = Handlers(Settings(admin_chat_id=99), store, on_scrape=on_scrape)
+    handlers = _handlers(store, settings=Settings(admin_chat_id=99), on_scrape=on_scrape)
     update = FakeUpdate(chat_id=99)
     await handlers.scrape(update, FakeContext())
     assert "failed" in update.message.replies[-1]["text"]
@@ -119,7 +136,7 @@ async def test_scrape_is_rejected_when_no_admin_is_configured(store):
         called.append(bot)
 
     # admin_chat_id defaults to 0, which disables privileged commands.
-    handlers = Handlers(Settings(), store, on_scrape=on_scrape)
+    handlers = _handlers(store, on_scrape=on_scrape)
     await handlers.scrape(FakeUpdate(chat_id=0), FakeContext())
     assert called == []
 
@@ -203,3 +220,143 @@ async def test_unknown_callback_data_is_ignored(handlers, store):
     update = FakeUpdate(chat_id=1, callback_data="garbage")
     await handlers.on_button(update, FakeContext())
     assert store.subscribers() == set()
+
+
+# -- /lists -----------------------------------------------------------
+
+async def test_lists_requires_a_subscription():
+    store = InMemoryStore()
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+
+    await _handlers(store).lists(update, context)
+
+    assert "/start" in update.message.replies[0]["text"]
+
+
+async def test_bare_lists_shows_current_lists():
+    store = InMemoryStore(default_lists=("netdev", "lkml"))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = []
+
+    await _handlers(store).lists(update, context)
+
+    text = update.message.replies[0]["text"]
+    assert "lkml" in text and "netdev" in text
+
+
+async def test_lists_add_accepts_a_valid_name():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "netdev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == {"netdev"}
+    assert "✅" in update.message.replies[0]["text"]
+
+
+async def test_lists_add_rejects_an_unknown_name_and_keeps_the_good_ones():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "netdev", "netdevv"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == {"netdev"}
+    text = update.message.replies[0]["text"]
+    assert "netdevv" in text and "❌" in text
+
+
+async def test_lists_add_suggests_near_matches():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "linux"]
+
+    await _handlers(store).lists(update, context)
+
+    text = update.message.replies[0]["text"]
+    assert "linux-media" in text and "linux-input" in text
+
+
+async def test_lists_add_is_case_insensitive():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "NetDev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == {"netdev"}
+
+
+async def test_lists_del_removes_and_warns_when_empty():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["del", "netdev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == set()
+    assert "no lists" in update.message.replies[0]["text"].lower()
+
+
+async def test_lists_del_does_not_validate_against_the_index():
+    """Removing a name you somehow hold must work even if lore dropped it."""
+    store = InMemoryStore(default_lists=("retired-list",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["del", "retired-list"]
+
+    await _handlers(store).lists(update, context)
+
+    assert store.mailing_lists(1) == set()
+
+
+async def test_lists_search_shows_matches():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["search", "linux"]
+
+    await _handlers(store).lists(update, context)
+
+    text = update.message.replies[0]["text"]
+    assert "linux-media" in text and "linux-input" in text
+
+
+async def test_lists_search_reports_no_matches():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["search", "zzzz"]
+
+    await _handlers(store).lists(update, context)
+
+    assert "no lists match" in update.message.replies[0]["text"].lower()
+
+
+async def test_lists_rejects_an_unknown_subcommand():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["frobnicate", "netdev"]
+
+    await _handlers(store).lists(update, context)
+
+    assert "/lists add" in update.message.replies[0]["text"]
+
+
+async def test_lists_add_without_names_shows_usage():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add"]
+
+    await _handlers(store).lists(update, context)
+
+    assert "/lists add" in update.message.replies[0]["text"]

@@ -135,5 +135,6 @@ class FakeUpdate:
 
 
 class FakeContext:
-    def __init__(self, bot=None):
+    def __init__(self, bot=None, args=None):
         self.bot = bot or FakeBot()
+        self.args = list(args or [])
