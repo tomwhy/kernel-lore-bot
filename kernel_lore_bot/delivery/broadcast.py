@@ -292,10 +292,6 @@ class Broadcaster:
                 continue
 
             text = format_update_notification(item.thread)
-            # The button always points at the root id: that's the id every
-            # other part of the UI (the digest's follow button, /following)
-            # treats as this thread's canonical identity.
-            markup = unfollow_keyboard(item.thread.id)
 
             log.info(
                 "Notifying %d follower(s) of updated thread: %s",
@@ -303,6 +299,17 @@ class Broadcaster:
             )
 
             for chat_id, followed_ids in ids_by_chat.items():
+                # The button must carry an id this chat actually holds, or
+                # pressing it is a no-op and the chat has no way to stop the
+                # notifications (there is no /following command; /stop drops
+                # the whole subscription). Prefer the root id when the chat
+                # holds it, since that's the id the digest's own follow
+                # button uses and keeps the common case unchanged; otherwise
+                # fall back to one of the reply ids it does hold.
+                button_id = (
+                    item.thread.id if item.thread.id in followed_ids else followed_ids[0]
+                )
+                markup = unfollow_keyboard(button_id)
                 result = await send_to(bot, chat_id, text, reply_markup=markup)
                 if result is SendResult.BLOCKED:
                     for followed_id in followed_ids:

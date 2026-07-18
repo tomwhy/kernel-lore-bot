@@ -6,11 +6,12 @@ from datetime import datetime, timedelta, timezone
 from telegram.error import BadRequest, Forbidden
 
 from kernel_lore_bot.delivery.broadcast import Broadcaster
+from kernel_lore_bot.delivery.handlers import Handlers
 from kernel_lore_bot.models import Entry, Node, Reply, Thread
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.storage import InMemoryStore
 
-from .conftest import FakeBot
+from .conftest import FakeBot, FakeContext, FakeUpdate
 
 NOW = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
 
@@ -360,6 +361,72 @@ async def test_a_chat_following_both_root_and_reply_is_notified_only_once():
     await _broadcaster([old], store).run(bot, now=NOW)
 
     assert len(bot.texts_to(1)) == 1
+
+
+async def test_unfollow_button_for_a_reply_only_follower_carries_the_reply_id():
+    """
+    A chat following only a reply id must get an unfollow button for THAT
+    id, not the thread's root id it never held. Before the fix, the button
+    always carried the root id, so pressing it produced "You weren't
+    following this thread" while the real follow stayed in place and the
+    chat had no way to stop the notifications (there is no /following
+    command; /stop drops the whole subscription).
+
+    Driven end-to-end through the real button handler, not just asserted on
+    the markup, since the point of the fix is that pressing the button
+    actually works.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    callback_data = markup.inline_keyboard[0][0].callback_data
+    assert callback_data == "unfollow:reply@x.com"
+
+    handlers = Handlers(settings=Settings(), store=store)
+    update = FakeUpdate(chat_id=1, callback_data=callback_data)
+    context = FakeContext()
+    await handlers.on_button(update, context)
+
+    assert store.followers("reply@x.com") == []
+    assert "Unfollowed" in context.bot.texts_to(1)[0]
+
+
+async def test_unfollow_button_for_a_root_follower_carries_the_root_id():
+    """The common case must not regress: a chat following the root gets a
+    button for the root id."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("old@x.com", 1)
+
+    old = _thread("old@x.com", NOW - timedelta(hours=10))
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    assert markup.inline_keyboard[0][0].callback_data == "unfollow:old@x.com"
+
+
+async def test_unfollow_button_prefers_the_root_id_when_the_chat_holds_both():
+    """A chat following both the root and a reply gets a button carrying the
+    root id -- the id every other part of the UI treats as canonical."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("root@x.com", 1)
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    assert markup.inline_keyboard[0][0].callback_data == "unfollow:root@x.com"
 
 
 async def test_forbidden_prunes_the_reply_follow_the_chat_actually_holds():
