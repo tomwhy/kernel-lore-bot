@@ -95,9 +95,9 @@ class Broadcaster:
         now = now or datetime.now(timezone.utc)
         return now - timedelta(hours=self.settings.loopback_hours)
 
-    def collect(self, cutoff: datetime) -> list[Classified]:
+    def collect(self, cutoff: datetime, mailing_lists: Sequence[str]) -> list[Classified]:
         """Fetch, filter, and classify. No Telegram, no async."""
-        threads = list(self.source.fetch_threads(cutoff))
+        threads = list(self.source.fetch_threads(cutoff, mailing_lists))
         kept = apply_filters(threads, self.filters)
         if len(kept) < len(threads):
             log.info(
@@ -139,7 +139,9 @@ class Broadcaster:
         # used for the early "nothing to fetch" guard. The actual send below
         # re-reads self.store.subscribers() so a chat that unsubscribed
         # mid-scrape does not still receive the digest.
-        classified = await asyncio.to_thread(self.collect, cutoff)
+        classified = await asyncio.to_thread(
+            self.collect, cutoff, self.settings.mailing_lists
+        )
         if not classified:
             log.info("No new threads to send.")
             return

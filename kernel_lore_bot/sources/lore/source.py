@@ -1,10 +1,10 @@
 """
 LoreSource: the only Source implementation.
 
-Walks each configured list's `new.atom` backwards in time, and for every entry
-newer than the cutoff downloads that thread's full mbox and parses it into a
-Thread. Threads are deduplicated across lists by message-id, since one thread is
-frequently posted to several lists.
+Walks each given mailing list's `new.atom` backwards in time, and for every
+entry newer than the cutoff downloads that thread's full mbox and parses it
+into a Thread. Threads are deduplicated across lists by message-id, since one
+thread is frequently posted to several lists.
 """
 
 from __future__ import annotations
@@ -12,8 +12,9 @@ from __future__ import annotations
 import gzip
 import logging
 import zlib
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence
 
 from kernel_lore_bot.http import FetchError, HttpClient
 from kernel_lore_bot.models import Thread
@@ -37,36 +38,58 @@ class LoreSource:
     def __init__(
         self,
         client: HttpClient,
-        mailing_lists: tuple[str, ...],
         progress: Progress | None = None,
         base_url: str = mbox_parser.LORE_BASE_URL,
     ) -> None:
         self.client = client
-        self.mailing_lists = tuple(mailing_lists)
         self.progress = progress if progress is not None else NullProgress()
         self.base_url = base_url.rstrip("/")
 
     # -- public API ---------------------------------------------------
 
-    def fetch_threads(self, since: datetime) -> Iterator[Thread]:
-        """Yield every thread with activity at or after `since`, deduplicated."""
-        seen: set[str] = set()
+    def fetch_threads(
+        self, since: datetime, mailing_lists: Sequence[str]
+    ) -> list[Thread]:
+        """
+        Every thread with activity at or after `since`, deduplicated.
 
-        for list_name in self.mailing_lists:
+        A thread cross-posted to several lists is downloaded once and carries
+        all of their names. That means results cannot be yielded as they are
+        found — a later list may add to a thread already seen — so this
+        collects fully before returning.
+        """
+        # node Message-ID -> root Message-ID of the thread that contains it.
+        # Keyed on every node, not just roots, so a reply appearing in a feed
+        # resolves to its thread instead of triggering a second download.
+        seen: dict[str, str] = {}
+        threads: dict[str, Thread] = {}
+
+        for list_name in mailing_lists:
             with self.progress.bar(f"  {list_name}") as bar:
                 for feed_entry in self._iter_feed_entries(list_name, since):
                     bar.update(1)
 
-                    if feed_entry.entry_id in seen:
+                    root_id = seen.get(feed_entry.entry_id)
+                    if root_id is not None:
+                        existing = threads.get(root_id)
+                        if existing is not None:
+                            threads[root_id] = replace(
+                                existing,
+                                mailing_lists=existing.mailing_lists | {list_name},
+                            )
                         continue
 
                     thread = self._fetch_thread(feed_entry.entry_id, list_name)
                     if thread is None:
-                        seen.add(feed_entry.entry_id)
+                        # Remember the failure so the next list does not retry it.
+                        seen[feed_entry.entry_id] = ""
                         continue
 
-                    seen.update(node.entry.id for node in thread.walk())
-                    yield thread
+                    threads[thread.id] = thread
+                    for node in thread.walk():
+                        seen[node.entry.id] = thread.id
+
+        return list(threads.values())
 
     # -- internals ----------------------------------------------------
 

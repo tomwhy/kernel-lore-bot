@@ -80,7 +80,7 @@ def test_build_components_returns_a_store_source_and_filters(tmp_path):
     )
     store, source, filters = cli.build_components(settings)
     assert store.subscribers() == set()
-    assert source.mailing_lists == ("netdev",)
+    assert source.base_url == "https://lore.kernel.org"
     assert len(filters) == 1
     assert filters[0].names == ("robot",)
 

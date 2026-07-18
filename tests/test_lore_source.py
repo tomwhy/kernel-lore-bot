@@ -39,7 +39,8 @@ def _feed(*entries: tuple[str, str]) -> bytes:
 
 
 def _source(client, lists=("linux-input",)):
-    return LoreSource(client=client, mailing_lists=lists, base_url=BASE)
+    """Return (source, lists) — lists are now a fetch_threads argument."""
+    return LoreSource(client=client, base_url=BASE), tuple(lists)
 
 
 def test_fetches_thread_for_each_feed_entry(conftest_fake_client):
@@ -49,7 +50,8 @@ def test_fetches_thread_for_each_feed_entry(conftest_fake_client):
             f"{BASE}/all/a@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("a@x.com"))],
         }
     )
-    threads = list(_source(client).fetch_threads(SINCE))
+    source, lists = _source(client)
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["a@x.com"]
     assert threads[0].mailing_lists == frozenset({"linux-input"})
 
@@ -67,7 +69,8 @@ def test_stops_paginating_at_an_entry_older_than_since(conftest_fake_client):
             f"{BASE}/all/new@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("new@x.com"))],
         }
     )
-    threads = list(_source(client).fetch_threads(SINCE))
+    source, lists = _source(client)
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["new@x.com"]
     # It must not have fetched the mbox for the older entry.
     assert not any("old@x.com" in c["url"] for c in client.calls)
@@ -85,7 +88,8 @@ def test_requests_next_page_one_second_before_last_entry(conftest_fake_client):
             f"{BASE}/all/b@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("b@x.com"))],
         }
     )
-    list(_source(client).fetch_threads(SINCE))
+    source, lists = _source(client)
+    list(source.fetch_threads(SINCE, lists))
     feed_calls = [c for c in client.calls if c["url"] == FEED]
     # Page 2 asks for one second before page 1's last entry (15:00:00 -> 14:59:59).
     assert feed_calls[1]["params"]["t"] == "20260716145959"
@@ -94,7 +98,8 @@ def test_requests_next_page_one_second_before_last_entry(conftest_fake_client):
 
 def test_empty_page_ends_the_list(conftest_fake_client):
     client = conftest_fake_client({FEED: [_feed()]})
-    assert list(_source(client).fetch_threads(SINCE)) == []
+    source, lists = _source(client)
+    assert list(source.fetch_threads(SINCE, lists)) == []
     assert len([c for c in client.calls if c["url"] == FEED]) == 1
 
 
@@ -107,7 +112,8 @@ def test_same_thread_in_two_lists_is_fetched_once(conftest_fake_client):
             f"{BASE}/all/dup@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("dup@x.com"))],
         }
     )
-    threads = list(_source(client, lists=("linux-input", "netdev")).fetch_threads(SINCE))
+    source, lists = _source(client, lists=("linux-input", "netdev"))
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["dup@x.com"]
     mbox_calls = [c for c in client.calls if "t.mbox.gz" in c["url"]]
     assert len(mbox_calls) == 1
@@ -138,7 +144,8 @@ def test_reply_message_id_seen_via_thread_is_not_refetched(conftest_fake_client)
             f"{BASE}/all/root@x.com/t.mbox.gz": [_mbox_gz(thread_text)],
         }
     )
-    threads = list(_source(client).fetch_threads(SINCE))
+    source, lists = _source(client)
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["root@x.com"]
     assert len([c for c in client.calls if "t.mbox.gz" in c["url"]]) == 1
 
@@ -150,7 +157,8 @@ def test_uncompressed_mbox_is_accepted(conftest_fake_client):
             f"{BASE}/all/a@x.com/t.mbox.gz": [_thread_mbox("a@x.com").encode()],
         }
     )
-    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["a@x.com"]
+    source, lists = _source(client)
+    assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["a@x.com"]
 
 
 def test_feed_failure_skips_that_list_but_not_the_others(conftest_fake_client):
@@ -162,13 +170,15 @@ def test_feed_failure_skips_that_list_but_not_the_others(conftest_fake_client):
             f"{BASE}/all/ok@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("ok@x.com"))],
         }
     )
-    threads = list(_source(client, lists=("linux-input", "netdev")).fetch_threads(SINCE))
+    source, lists = _source(client, lists=("linux-input", "netdev"))
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["ok@x.com"]
 
 
 def test_malformed_feed_xml_skips_that_list(conftest_fake_client):
     client = conftest_fake_client({FEED: [b"<html>503</html>"]})
-    assert list(_source(client).fetch_threads(SINCE)) == []
+    source, lists = _source(client)
+    assert list(source.fetch_threads(SINCE, lists)) == []
 
 
 def test_mbox_fetch_failure_skips_only_that_thread(conftest_fake_client):
@@ -185,7 +195,8 @@ def test_mbox_fetch_failure_skips_only_that_thread(conftest_fake_client):
             f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
         }
     )
-    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
+    source, lists = _source(client)
+    assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]
 
 
 def test_empty_mbox_body_skips_only_that_thread(conftest_fake_client):
@@ -205,7 +216,8 @@ def test_empty_mbox_body_skips_only_that_thread(conftest_fake_client):
             f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
         }
     )
-    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
+    source, lists = _source(client)
+    assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]
 
 
 def _corrupted_gzip(text: str) -> bytes:
@@ -237,7 +249,8 @@ def test_corrupted_gzip_bit_flip_skips_only_that_thread(conftest_fake_client):
             f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
         }
     )
-    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
+    source, lists = _source(client)
+    assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]
 
 
 def test_corrupted_gzip_in_one_list_does_not_kill_a_later_list(conftest_fake_client):
@@ -254,7 +267,8 @@ def test_corrupted_gzip_in_one_list_does_not_kill_a_later_list(conftest_fake_cli
             f"{BASE}/all/ok@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("ok@x.com"))],
         }
     )
-    threads = list(_source(client, lists=("linux-input", "netdev")).fetch_threads(SINCE))
+    source, lists = _source(client, lists=("linux-input", "netdev"))
+    threads = list(source.fetch_threads(SINCE, lists))
     assert [t.id for t in threads] == ["ok@x.com"]
 
 
@@ -265,7 +279,8 @@ def test_pagination_terminates_when_server_repeats_the_same_page(conftest_fake_c
     # must end the list instead of looping forever.
     same_page = _feed(("stuck@x.com", "2026-07-16T15:00:00Z"))
     client = conftest_fake_client({FEED: [same_page] * 500})
-    threads = list(_source(client).fetch_threads(SINCE))
+    source, lists = _source(client)
+    threads = list(source.fetch_threads(SINCE, lists))
     # Fetched the one entry the (broken) server ever offers, then stopped.
     feed_calls = [c for c in client.calls if c["url"] == FEED]
     assert len(feed_calls) < 500
@@ -284,9 +299,32 @@ def test_entry_url_follows_a_custom_base_url(conftest_fake_client):
             f"{mirror}/all/a@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("a@x.com"))],
         }
     )
-    source = LoreSource(client=client, mailing_lists=("linux-input",), base_url=mirror)
-    threads = list(source.fetch_threads(SINCE))
+    source = LoreSource(client=client, base_url=mirror)
+    threads = list(source.fetch_threads(SINCE, ("linux-input",)))
     assert threads[0].roots[0].entry.url == f"{mirror}/all/a@x.com"
+
+
+def test_cross_posted_thread_carries_every_list(conftest_fake_client):
+    """One thread on two lists is fetched once and tagged with both lists."""
+    other_feed = f"{BASE}/netdev/new.atom"
+    atom = _feed(("shared@x.com", "2026-07-16T15:00:00Z"))
+    mbox = _mbox_gz(_thread_mbox("shared@x.com"))
+    client = conftest_fake_client(
+        {
+            FEED: [atom, _feed()],
+            other_feed: [atom, _feed()],
+            f"{BASE}/all/shared@x.com/t.mbox.gz": [mbox],
+        }
+    )
+    source = LoreSource(client=client, base_url=BASE)
+
+    threads = source.fetch_threads(SINCE, ("linux-input", "netdev"))
+
+    assert len(threads) == 1
+    assert threads[0].mailing_lists == frozenset({"linux-input", "netdev"})
+    # The mbox is downloaded once, not once per list.
+    mbox_calls = [c for c in client.calls if "t.mbox.gz" in c["url"]]
+    assert len(mbox_calls) == 1
 
 
 def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
@@ -307,4 +345,5 @@ def test_truncated_gzip_skips_only_that_thread(conftest_fake_client):
             f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
         }
     )
-    assert [t.id for t in _source(client).fetch_threads(SINCE)] == ["good@x.com"]
+    source, lists = _source(client)
+    assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]

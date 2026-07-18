@@ -33,7 +33,6 @@ def build_components(settings: Settings) -> tuple[Store, LoreSource, list[Filter
     store = JsonStore(settings.state_file)
     source = LoreSource(
         client=RequestsClient(timeout=settings.request_timeout),
-        mailing_lists=settings.mailing_lists,
         progress=TqdmProgress(),
     )
     filters: list[Filter] = []
@@ -113,7 +112,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.dry:
         broadcaster = Broadcaster(settings, store, source, filters)
         cutoff = broadcaster.cutoff(datetime.now(timezone.utc))
-        print(format_dry_run(broadcaster.collect(cutoff), cutoff))
+        print(format_dry_run(broadcaster.collect(cutoff, settings.mailing_lists), cutoff))
         return 0
 
     log.info("Starting Telegram bot…")

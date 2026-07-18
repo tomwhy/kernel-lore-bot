@@ -33,7 +33,7 @@ class FakeSource:
         self.threads = threads
         self.calls = []
 
-    def fetch_threads(self, since):
+    def fetch_threads(self, since, mailing_lists):
         self.calls.append(since)
         return list(self.threads)
 
@@ -221,7 +221,7 @@ def test_collect_returns_new_threads_before_updated_ones():
         ],
         store,
     )
-    result = b.collect(b.cutoff(NOW))
+    result = b.collect(b.cutoff(NOW), ("netdev",))
     assert [c.thread.id for c in result] == ["new@x.com", "old@x.com"]
 
 
@@ -237,7 +237,7 @@ async def test_run_does_not_block_the_event_loop_during_collect():
     """
 
     class SlowSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             time.sleep(0.05)  # a real, blocking sleep — simulates requests.get()
             return []
 
@@ -315,7 +315,7 @@ async def test_concurrent_run_calls_do_not_interleave_their_scrapes():
     events: list[str] = []
 
     class TrackingSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             events.append("enter")
             time.sleep(0.05)  # real blocking work, like requests.get()
             events.append("exit")
@@ -351,7 +351,7 @@ async def test_a_chat_that_stops_mid_scrape_receives_nothing():
     store.add_subscriber(2)
 
     class UnsubscribingSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             # Simulates chat 1 sending /stop while the scrape is in flight.
             store.remove_subscriber(1)
             return [_thread("a@x.com", NOW)]
