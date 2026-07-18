@@ -2,8 +2,14 @@
 JsonStore: the whole state in one file, loaded once, written atomically.
 
     {
-      "version": 1,
-      "subscribers": {"12345": {"follows": ["msgid-a@example.com"]}}
+      "version": 2,
+      "subscribers": {
+        "12345": {
+          "follows": ["msgid-a@example.com"],
+          "mailing_lists": ["netdev"],
+          "blocked_authors": ["Noisy Bot"]
+        }
+      }
     }
 
 One file means one atomic write per mutation, so /stop cannot half-apply. Reads
@@ -18,31 +24,58 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 from kernel_lore_bot.storage.base import BaseStore, Subscriber
 
 log = logging.getLogger(__name__)
 
-STATE_VERSION = 1
+STATE_VERSION = 2
 
 
-def _subscriber_from_json(chat: str, rec: dict) -> Subscriber:
-    """Build a Subscriber from one entry of the "subscribers" object."""
-    return Subscriber(chat_id=int(chat), follows=set(rec.get("follows", [])))
+def _subscriber_from_json(
+    chat: str,
+    rec: dict,
+    default_lists: frozenset[str],
+    default_blocks: frozenset[str],
+) -> Subscriber:
+    """Build a Subscriber from one entry of the "subscribers" object.
+
+    A missing key means a v1 record, which predates the field: fall back to
+    the configured defaults so an existing subscriber's digest is unchanged
+    by the upgrade. An empty list is NOT missing — it means the subscriber
+    deliberately removed everything, and must survive a restart.
+    """
+    lists = rec.get("mailing_lists")
+    blocks = rec.get("blocked_authors")
+    return Subscriber(
+        chat_id=int(chat),
+        follows=set(rec.get("follows", [])),
+        mailing_lists=set(default_lists) if lists is None else set(lists),
+        blocked_authors=set(default_blocks) if blocks is None else set(blocks),
+    )
 
 
 def _subscriber_to_json(sub: Subscriber) -> dict:
     """The on-disk shape of one subscriber. Sorted so writes are stable."""
-    return {"follows": sorted(sub.follows)}
+    return {
+        "follows": sorted(sub.follows),
+        "mailing_lists": sorted(sub.mailing_lists),
+        "blocked_authors": sorted(sub.blocked_authors),
+    }
 
 
-def _load_state(path: Path) -> dict[int, Subscriber]:
+def _load_state(
+    path: Path,
+    default_lists: frozenset[str],
+    default_blocks: frozenset[str],
+) -> dict[int, Subscriber]:
     if not path.exists():
         return {}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         subs = [
-            _subscriber_from_json(chat, rec)
+            _subscriber_from_json(chat, rec, default_lists, default_blocks)
             for chat, rec in raw.get("subscribers", {}).items()
         ]
         return {sub.chat_id: sub for sub in subs}
@@ -72,9 +105,16 @@ def _load_state(path: Path) -> dict[int, Subscriber]:
 class JsonStore(BaseStore):
     """Store backed by a single JSON file."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        default_lists: Iterable[str] = (),
+        default_blocks: Iterable[str] = (),
+    ) -> None:
         self._path = Path(path)
-        super().__init__(_load_state(self._path))
+        lists = frozenset(default_lists)
+        blocks = frozenset(default_blocks)
+        super().__init__(_load_state(self._path, lists, blocks), lists, blocks)
 
     def _flush(self) -> None:
         payload = {

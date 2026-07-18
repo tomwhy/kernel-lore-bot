@@ -24,7 +24,9 @@ def test_written_file_has_the_documented_shape(tmp_path):
     store.follow("t1", 42)
     assert _state(tmp_path) == {
         "version": STATE_VERSION,
-        "subscribers": {"42": {"follows": ["t1"]}},
+        "subscribers": {
+            "42": {"follows": ["t1"], "mailing_lists": [], "blocked_authors": []}
+        },
     }
 
 
@@ -109,6 +111,66 @@ def test_state_file_round_trips_through_subscriber(tmp_path):
 
     store.add_subscriber(333)
     assert _state(tmp_path)["subscribers"] == {
-        "222": {"follows": ["t1", "t2"]},
-        "333": {"follows": []},
+        "222": {"follows": ["t1", "t2"], "mailing_lists": [], "blocked_authors": []},
+        "333": {"follows": [], "mailing_lists": [], "blocked_authors": []},
     }
+
+
+def test_v1_record_is_migrated_to_defaults(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({
+            "version": 1,
+            "subscribers": {"7": {"follows": ["t@example.com"]}},
+        }),
+        encoding="utf-8",
+    )
+
+    store = JsonStore(path, default_lists=("netdev",), default_blocks=("bot",))
+
+    assert store.mailing_lists(7) == {"netdev"}
+    assert store.blocked_authors(7) == {"bot"}
+    assert store.followers("t@example.com") == [7]
+
+
+def test_v2_record_round_trips(tmp_path):
+    path = tmp_path / "state.json"
+    store = JsonStore(path, default_lists=("netdev",))
+    store.add_subscriber(7)
+    store.add_lists(7, ["rcu"])
+    store.block(7, "Noisy Bot")
+
+    reloaded = JsonStore(path, default_lists=("netdev",))
+
+    assert reloaded.mailing_lists(7) == {"netdev", "rcu"}
+    assert reloaded.blocked_authors(7) == {"Noisy Bot"}
+
+
+def test_written_file_is_version_2_and_sorted(tmp_path):
+    path = tmp_path / "state.json"
+    store = JsonStore(path, default_lists=("netdev", "lkml"))
+    store.add_subscriber(7)
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+
+    assert raw["version"] == 2
+    assert raw["subscribers"]["7"]["mailing_lists"] == ["lkml", "netdev"]
+    assert raw["subscribers"]["7"]["blocked_authors"] == []
+
+
+def test_explicitly_empty_lists_are_not_refilled_with_defaults(tmp_path):
+    """A subscriber who removed every list must stay empty across a restart."""
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({
+            "version": 2,
+            "subscribers": {
+                "7": {"follows": [], "mailing_lists": [], "blocked_authors": []}
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    store = JsonStore(path, default_lists=("netdev",))
+
+    assert store.mailing_lists(7) == set()
