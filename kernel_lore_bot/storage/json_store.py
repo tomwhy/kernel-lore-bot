@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -94,20 +95,65 @@ def _load_state(
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         subs: list[Subscriber] = []
+        total = 0
+        skipped = 0
         for chat, rec in raw.get("subscribers", {}).items():
+            total += 1
             try:
                 subs.append(_subscriber_from_json(chat, rec, default_lists, default_blocks))
             except (ValueError, AttributeError, TypeError) as exc:
                 # One malformed record (a non-iterable or otherwise bogus
                 # "mailing_lists"/"blocked_authors"/"follows") must not take
                 # every OTHER subscriber's valid follows down with it. Log
-                # loudly and skip just this record — the file itself is
-                # fine, so there is nothing to back up or rename here (see
-                # the file-level except below for that, separate, case).
+                # loudly and skip just this record; whether the file itself
+                # needs backing up is decided below, once we know how many
+                # records were affected in total.
+                skipped += 1
                 log.error(
                     "Could not parse subscriber %r in %s: %s — skipping",
                     chat, path, exc,
                 )
+
+        if total and skipped == total:
+            # EVERY record failed to parse. That is no longer "one bad
+            # row" — it is either a genuinely corrupt file or a systemic
+            # bug in Subscriber construction that would silently swallow
+            # every subscriber with no exception and no backup (see the
+            # per-record except above, which is deliberately broad).
+            # Route it into the file-level except below, which preserves
+            # the original bytes under a timestamped backup instead of
+            # starting empty with only a log line to show for it.
+            raise ValueError(
+                f"all {total} subscriber record(s) in {path} failed to parse"
+            )
+
+        if skipped:
+            # Some, but not all, records were skipped. _flush only ever
+            # serializes what made it into memory, so the very next
+            # mutation would rewrite state.json with the skipped records
+            # permanently gone — silent, unrecoverable data loss. Preserve
+            # the original bytes now, before that can happen. This is a
+            # copy, not a rename: the live file must keep serving the
+            # records that DID load.
+            backup = path.with_name(
+                path.name
+                + "."
+                + datetime.now(timezone.utc).strftime("corrupt-%Y%m%d%H%M%S")
+            )
+            try:
+                shutil.copy2(path, backup)
+                log.error(
+                    "Skipped %d of %d subscriber record(s) in %s — original "
+                    "preserved at %s",
+                    skipped, total, path, backup,
+                )
+            except OSError as copy_exc:
+                log.error(
+                    "Skipped %d of %d subscriber record(s) in %s — AND "
+                    "could not back it up (%s)",
+                    skipped, total, path, copy_exc,
+                )
+
         return {sub.chat_id: sub for sub in subs}
     except (json.JSONDecodeError, ValueError, AttributeError, TypeError) as exc:
         # The file exists but is unreadable (e.g. a crash landed the rename
