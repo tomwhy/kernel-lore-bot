@@ -1,0 +1,32 @@
+name: Publish image
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # The commit tag is what makes a deploy reversible: :latest moves, but
+          # every build keeps an immutable tag to roll back to.
+          tags: |
+            ghcr.io/tomwhy/kernel-lore-bot:latest
+            ghcr.io/tomwhy/kernel-lore-bot:${{ github.sha }}

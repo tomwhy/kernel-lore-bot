@@ -3,9 +3,9 @@
 # =============================================================
 services:
   kernel-lore-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Deploys pull this image; no source tree is needed on the host. Local
+    # development builds it instead, via the build: block in compose.override.yaml.
+    image: ghcr.io/tomwhy/kernel-lore-bot:latest
     restart: unless-stopped
 
     env_file:
