@@ -21,6 +21,7 @@ def _thread(
     msg_id,
     updated,
     author="Alice Adams",
+    author_email="alice@example.com",
     mailing_lists=frozenset({"netdev"}),
     root_age_hours=None,
 ):
@@ -40,6 +41,7 @@ def _thread(
         title=f"[PATCH] {msg_id}",
         url=f"https://lore.kernel.org/all/{msg_id}",
         author=author,
+        author_email=author_email,
         updated=updated,
         reply=None,
     )
@@ -226,9 +228,14 @@ async def test_a_personal_block_hides_a_thread_from_only_that_subscriber():
     store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
-    store.block(1, "kernel test robot")
+    store.block(1, "lkp@intel.com")
 
-    threads = [_thread("bot@example.com", NOW, author="Kernel Test Robot")]
+    threads = [
+        _thread(
+            "bot@example.com", NOW,
+            author="Kernel Test Robot", author_email="lkp@intel.com",
+        )
+    ]
     bot = FakeBot()
     await _broadcaster(threads, store).run(bot, now=NOW)
 
@@ -311,7 +318,7 @@ async def test_followers_are_notified_about_threads_outside_their_lists():
     store.add_subscriber(1)
     store.add_lists(1, ["rcu"])
     store.follow("old@example.com", 1)
-    store.block(1, "Alice Adams")
+    store.block(1, "alice@example.com")
 
     # count_entries_since(updated, cutoff) is 0 here (single node, root well
     # before cutoff) yet this still notifies: it arrives via the LIST scrape
@@ -458,12 +465,18 @@ async def test_forbidden_prunes_the_reply_follow_the_chat_actually_holds():
 async def test_blocked_authors_never_reach_subscribers():
     store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
-    store.block(1, "kernel test robot")
+    store.block(1, "lkp@intel.com")
     bot = FakeBot()
 
     threads = [
-        _thread("bot@x.com", NOW, author="kernel test robot"),
-        _thread("human@x.com", NOW, author="Linus Torvalds"),
+        _thread(
+            "bot@x.com", NOW,
+            author="Kernel Test Robot", author_email="lkp@intel.com",
+        ),
+        _thread(
+            "human@x.com", NOW,
+            author="Linus Torvalds", author_email="torvalds@linux-foundation.org",
+        ),
     ]
     await _broadcaster(threads, store).run(bot, now=NOW)
 

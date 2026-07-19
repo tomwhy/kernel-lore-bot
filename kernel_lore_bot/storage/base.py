@@ -16,6 +16,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from typing import Iterable, Protocol
 
+from kernel_lore_bot.filters import normalize_address
+
 log = logging.getLogger(__name__)
 
 
@@ -27,6 +29,8 @@ class Subscriber:
     chat_id: int
     follows: set[str] = field(default_factory=set)
     mailing_lists: set[str] = field(default_factory=set)
+    # Email addresses, normalized (stripped and lowercased) — NOT display
+    # names. Matched exactly against Thread.author_email.
     blocked_authors: set[str] = field(default_factory=set)
 
 
@@ -43,8 +47,8 @@ class Store(Protocol):
     def add_lists(self, chat_id: int, names: Iterable[str]) -> set[str]: ...
     def remove_lists(self, chat_id: int, names: Iterable[str]) -> set[str]: ...
     def blocked_authors(self, chat_id: int) -> set[str]: ...
-    def block(self, chat_id: int, name: str) -> bool: ...
-    def unblock(self, chat_id: int, name: str) -> bool: ...
+    def block(self, chat_id: int, email: str) -> bool: ...
+    def unblock(self, chat_id: int, email: str) -> bool: ...
     def all_mailing_lists(self) -> set[str]: ...
     def all_followed_threads(self) -> set[str]: ...
 
@@ -222,29 +226,31 @@ class BaseStore:
         log.info("chat_id=%d removed list(s): %s", chat_id, ", ".join(sorted(removed)))
         return removed
 
-    def block(self, chat_id: int, name: str) -> bool:
+    def block(self, chat_id: int, email: str) -> bool:
         sub = self._subs.get(chat_id)
         if sub is None:
             return False
-        # Blocks match case-insensitively (see filters.BlockedAuthors), so two
-        # spellings of one name would be a duplicate rule, not two rules.
-        if any(existing.lower() == name.lower() for existing in sub.blocked_authors):
+        # Store one spelling per mailbox. filters.BlockedAuthors matches the
+        # address exactly, so two casings would otherwise be two rules that
+        # behave identically -- and the second would look like it did
+        # nothing. Normalizing on the way in keeps the stored value and the
+        # matched value the same string.
+        address = normalize_address(email)
+        if not address or address in sub.blocked_authors:
             return False
-        sub.blocked_authors.add(name)
+        sub.blocked_authors.add(address)
         self._flush()
-        log.info("chat_id=%d blocked author %r", chat_id, name)
+        log.info("chat_id=%d blocked address %r", chat_id, address)
         return True
 
-    def unblock(self, chat_id: int, name: str) -> bool:
+    def unblock(self, chat_id: int, email: str) -> bool:
         sub = self._subs.get(chat_id)
         if sub is None:
             return False
-        match = next(
-            (e for e in sub.blocked_authors if e.lower() == name.lower()), None
-        )
-        if match is None:
+        address = normalize_address(email)
+        if address not in sub.blocked_authors:
             return False
-        sub.blocked_authors.discard(match)
+        sub.blocked_authors.discard(address)
         self._flush()
-        log.info("chat_id=%d unblocked author %r", chat_id, match)
+        log.info("chat_id=%d unblocked address %r", chat_id, address)
         return True

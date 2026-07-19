@@ -77,7 +77,7 @@ async def test_stop_warns_that_curation_is_discarded(handlers, store):
     await handlers.stop(update, FakeContext())
     text = update.message.replies[0]["text"]
     assert "lists" in text.lower()
-    assert "blocked authors" in text.lower()
+    assert "blocked addresses" in text.lower()
     # And the actual deletion behavior is unchanged.
     assert store.mailing_lists(1) == set()
     assert store.blocked_authors(1) == set()
@@ -478,17 +478,41 @@ async def test_filters_requires_a_subscription():
 
 
 async def test_bare_filters_lists_current_blocks():
-    store = InMemoryStore(default_blocks=("kernel test robot",))
+    store = InMemoryStore(default_blocks=("lkp@intel.com",))
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
     context.args = []
 
     await _handlers(store).filters(update, context)
 
-    assert "kernel test robot" in update.message.replies[0]["text"]
+    assert "lkp@intel.com" in update.message.replies[0]["text"]
 
 
-async def test_filters_block_takes_the_whole_remainder_as_one_name():
+async def test_filters_block_stores_the_address():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "lkp@intel.com"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+async def test_filters_block_normalises_the_typed_address():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "LKP@Intel.COM"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+async def test_filters_block_rejects_a_display_name():
+    """A name can never match now, so accepting one would store a rule the
+    subscriber believes works and which silently never fires."""
     store = InMemoryStore()
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
@@ -496,44 +520,54 @@ async def test_filters_block_takes_the_whole_remainder_as_one_name():
 
     await _handlers(store).filters(update, context)
 
-    assert store.blocked_authors(1) == {"Kernel Test Robot"}
+    assert store.blocked_authors(1) == set()
+    text = update.message.replies[0]["text"]
+    assert "address" in text.lower()
 
 
-async def test_filters_block_reports_a_duplicate():
-    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+async def test_filters_block_rejects_a_single_word_that_is_not_an_address():
+    store = InMemoryStore()
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
-    context.args = ["block", "kernel", "test", "robot"]
+    context.args = ["block", "robot"]
 
     await _handlers(store).filters(update, context)
 
-    assert store.blocked_authors(1) == {"Kernel Test Robot"}
+    assert store.blocked_authors(1) == set()
+    assert "address" in update.message.replies[0]["text"].lower()
+
+
+async def test_filters_block_reports_a_duplicate():
+    store = InMemoryStore(default_blocks=("lkp@intel.com",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "LKP@INTEL.COM"]
+
+    await _handlers(store).filters(update, context)
+
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
     assert "already" in update.message.replies[0]["text"].lower()
 
 
-async def test_filters_block_duplicate_echoes_the_stored_casing_not_the_typed_one():
-    """
-    Finding 4: blocking "kernel TEST robot" when "Kernel Test Robot" is
-    already stored used to echo back the user's own typed casing, so the
-    user could never see what casing is actually recorded.
-    """
-    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+async def test_filters_block_duplicate_echoes_the_stored_spelling():
+    """The reply must show what is actually recorded, not what was typed."""
+    store = InMemoryStore(default_blocks=("lkp@intel.com",))
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
-    context.args = ["block", "kernel", "TEST", "robot"]
+    context.args = ["block", "LKP@Intel.COM"]
 
     await _handlers(store).filters(update, context)
 
     text = update.message.replies[0]["text"]
-    assert "Kernel Test Robot" in text
-    assert "kernel TEST robot" not in text
+    assert "lkp@intel.com" in text
+    assert "LKP@Intel.COM" not in text
 
 
 async def test_filters_unblock_removes_case_insensitively():
-    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+    store = InMemoryStore(default_blocks=("lkp@intel.com",))
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
-    context.args = ["unblock", "KERNEL", "TEST", "ROBOT"]
+    context.args = ["unblock", "LKP@INTEL.COM"]
 
     await _handlers(store).filters(update, context)
 
@@ -545,7 +579,20 @@ async def test_filters_unblock_reports_a_miss():
     store = InMemoryStore()
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
-    context.args = ["unblock", "nobody"]
+    context.args = ["unblock", "nobody@example.com"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "ℹ️" in update.message.replies[0]["text"]
+
+
+async def test_filters_unblock_of_a_stale_name_block_still_works():
+    """Migration drops name blocks, but a subscriber may still type one;
+    unblocking it must report a clean miss rather than a format error."""
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["unblock", "Kernel", "Test", "Robot"]
 
     await _handlers(store).filters(update, context)
 
@@ -567,14 +614,15 @@ async def test_filters_rejects_an_unknown_subcommand():
     store = InMemoryStore()
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
-    context.args = ["frobnicate", "someone"]
+    context.args = ["frobnicate", "someone@example.com"]
 
     await _handlers(store).filters(update, context)
 
     assert "/filters block" in update.message.replies[0]["text"]
 
 
-async def test_filters_escapes_html_in_an_author_name():
+async def test_filters_escapes_html_when_rejecting_a_bad_address():
+    """The rejection echoes what the user typed, so it must be escaped."""
     store = InMemoryStore()
     store.add_subscriber(1)
     update, context = FakeUpdate(chat_id=1), FakeContext()
@@ -583,3 +631,14 @@ async def test_filters_escapes_html_in_an_author_name():
     await _handlers(store).filters(update, context)
 
     assert "&lt;b&gt;evil&lt;/b&gt;" in update.message.replies[0]["text"]
+
+
+async def test_filters_escapes_html_in_a_stored_address():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "<b>evil</b>@example.com"]
+
+    await _handlers(store).filters(update, context)
+
+    assert "&lt;b&gt;evil&lt;/b&gt;@example.com" in update.message.replies[0]["text"]

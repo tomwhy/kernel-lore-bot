@@ -29,7 +29,7 @@ Get a token from [@BotFather](https://t.me/BotFather); get your chat ID from
 | `/stop` | anyone | Unsubscribe and drop all follows |
 | `/status` | anyone | Show subscription and follow count |
 | `/lists` | anyone | Show or change which mailing lists you receive |
-| `/filters` | anyone | Show or change your blocked authors |
+| `/filters` | anyone | Show or change your blocked sender addresses |
 | `/scrape` | admin only | Run a scrape immediately |
 
 ## Configuration
@@ -46,11 +46,16 @@ All configuration is environment variables, read once at startup into a frozen
 | `SCHEDULE_INTERVAL_HOURS` | `LOOPBACK_HOURS` | Hours between scrapes; fractions allowed |
 | `KERNEL_BOT_STATE_DIR` | `data` | Directory holding `state.json` |
 
-Mailing lists and blocked authors are **per subscriber**, managed with `/lists`
+Mailing lists and blocked senders are **per subscriber**, managed with `/lists`
 and `/filters`. `DEFAULT_MAILING_LISTS` and `DEFAULT_BLOCKED_AUTHORS` in
 `settings.py` only seed a new subscriber, and serve as the fallback list index
 when lore's manifest cannot be fetched. List names are validated against
 lore's `manifest.js.gz`.
+
+Blocks are **email addresses, matched in full** against a thread's `From:`
+address — not display names, and not substrings. Blocking `lkp@intel.com`
+mutes that sender and nothing else; a thread whose `From:` carried no
+parseable address is never blocked.
 
 ## How it works
 
@@ -87,23 +92,34 @@ Everything lives in one file, `$KERNEL_BOT_STATE_DIR/state.json`:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "subscribers": {
     "12345": {
       "follows": ["msgid@example.com"],
       "mailing_lists": ["netdev", "rcu"],
-      "blocked_authors": ["kernel test robot"]
+      "blocked_authors": ["lkp@intel.com"]
     }
   }
 }
 ```
 
-It is written atomically (temp file + `os.replace`). An older (`version: 1`)
-file, whose subscriber records predate `mailing_lists`/`blocked_authors`, is
-migrated on load: a record missing either key inherits the currently
-configured `DEFAULT_MAILING_LISTS`/`DEFAULT_BLOCKED_AUTHORS` rather than
-starting empty. An explicit empty list is left alone — that means the
-subscriber deliberately removed everything.
+It is written atomically (temp file + `os.replace`). Older files are migrated
+on load:
+
+- **`version: 1`** predates `mailing_lists`/`blocked_authors` entirely. A
+  record missing either key inherits the currently configured
+  `DEFAULT_MAILING_LISTS`/`DEFAULT_BLOCKED_AUTHORS` rather than starting
+  empty. An explicit empty list is left alone — that means the subscriber
+  deliberately removed everything.
+- **`version: 2`** held `blocked_authors` as display names, matched as
+  case-insensitive substrings. Under address matching a name can never match,
+  so name entries are dropped on load (logged at WARNING) and surviving
+  addresses are normalized. A record left with nothing is reseeded from
+  `DEFAULT_BLOCKED_AUTHORS`; a record that was already empty is untouched.
+
+A file with no `version` key, or a non-integer one, is treated as the oldest
+schema — migrating is safe to repeat, whereas assuming "current" would leave
+dead name blocks in place forever.
 
 ## Layout
 

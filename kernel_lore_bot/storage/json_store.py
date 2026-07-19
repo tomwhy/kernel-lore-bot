@@ -2,12 +2,12 @@
 JsonStore: the whole state in one file, loaded once, written atomically.
 
     {
-      "version": 2,
+      "version": 3,
       "subscribers": {
         "12345": {
           "follows": ["msgid-a@example.com"],
           "mailing_lists": ["netdev"],
-          "blocked_authors": ["Noisy Bot"]
+          "blocked_authors": ["lkp@intel.com"]
         }
       }
     }
@@ -27,11 +27,48 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+from kernel_lore_bot.filters import looks_like_address, normalize_address
 from kernel_lore_bot.storage.base import BaseStore, Subscriber
 
 log = logging.getLogger(__name__)
 
-STATE_VERSION = 2
+STATE_VERSION = 3
+
+
+def _migrate_blocks_to_addresses(
+    chat: str, blocks: list, default_blocks: frozenset[str]
+) -> set[str]:
+    """
+    Bring one pre-v3 "blocked_authors" list forward to address matching.
+
+    Before v3 these held display names, matched as case-insensitive
+    substrings. Under exact-address matching a name can never match
+    anything, so keeping it would show the subscriber a rule that silently
+    does nothing — worse than showing them it is gone. Drop those, and
+    normalize the entries that already are addresses.
+
+    A record left with NOTHING after the drop is reseeded from the
+    configured defaults: that subscriber demonstrably wanted something
+    muted, and the default block is the closest surviving equivalent. A
+    record that was ALREADY empty is untouched — that means they removed
+    everything deliberately, and handing a block back would undo a choice
+    they made.
+    """
+    kept = {normalize_address(b) for b in blocks if looks_like_address(str(b))}
+    dropped = [b for b in blocks if not looks_like_address(str(b))]
+    if dropped:
+        log.warning(
+            "subscriber %s: dropping %d pre-v3 name block(s) that cannot match "
+            "an address: %s",
+            chat, len(dropped), ", ".join(repr(d) for d in dropped),
+        )
+    if blocks and not kept:
+        log.warning(
+            "subscriber %s: every block was a name — reseeding defaults %s",
+            chat, sorted(default_blocks),
+        )
+        return set(default_blocks)
+    return kept
 
 
 def _subscriber_from_json(
@@ -39,6 +76,7 @@ def _subscriber_from_json(
     rec: dict,
     default_lists: frozenset[str],
     default_blocks: frozenset[str],
+    version: int = STATE_VERSION,
 ) -> Subscriber:
     """Build a Subscriber from one entry of the "subscribers" object.
 
@@ -68,11 +106,18 @@ def _subscriber_from_json(
                 f"subscriber {chat!r}: {key!r} must be a JSON array, got "
                 f"{type(value).__name__}: {value!r}"
             )
+    if blocks is None:
+        blocked = set(default_blocks)
+    elif version < 3:
+        blocked = _migrate_blocks_to_addresses(chat, blocks, default_blocks)
+    else:
+        blocked = set(blocks)
+
     return Subscriber(
         chat_id=int(chat),
         follows=set(follows) if follows is not None else set(),
         mailing_lists=set(default_lists) if lists is None else set(lists),
-        blocked_authors=set(default_blocks) if blocks is None else set(blocks),
+        blocked_authors=blocked,
     )
 
 
@@ -121,13 +166,24 @@ def _load_state(
         return {}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
+        # A missing or non-integer version means a file written before the
+        # field was trustworthy. Treat it as the oldest schema: migrating is
+        # safe to repeat (an address survives it unchanged), whereas
+        # assuming "current" would leave stale name blocks in place forever.
+        raw_version = raw.get("version")
+        version = raw_version if isinstance(raw_version, int) else 1
+
         subs: list[Subscriber] = []
         total = 0
         skipped = 0
         for chat, rec in raw.get("subscribers", {}).items():
             total += 1
             try:
-                subs.append(_subscriber_from_json(chat, rec, default_lists, default_blocks))
+                subs.append(
+                    _subscriber_from_json(
+                        chat, rec, default_lists, default_blocks, version
+                    )
+                )
             except (ValueError, AttributeError, TypeError) as exc:
                 # One malformed record (a non-iterable or otherwise bogus
                 # "mailing_lists"/"blocked_authors"/"follows") must not take

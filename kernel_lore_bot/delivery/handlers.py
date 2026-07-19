@@ -17,6 +17,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from kernel_lore_bot.delivery.keyboards import follow_keyboard, unfollow_keyboard, parse_callback
+from kernel_lore_bot.filters import looks_like_address, normalize_address
 from kernel_lore_bot.settings import Settings
 from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import Store
@@ -31,11 +32,12 @@ LISTS_USAGE = (
 )
 
 FILTERS_USAGE = (
-    "<code>/filters</code> — your blocked authors\n"
-    "<code>/filters block &lt;name&gt;</code>\n"
-    "<code>/filters unblock &lt;name&gt;</code>\n\n"
-    "<i>Matching is case-insensitive and partial: blocking "
-    "<code>robot</code> mutes “Kernel Test Robot”.</i>"
+    "<code>/filters</code> — your blocked addresses\n"
+    "<code>/filters block &lt;email&gt;</code>\n"
+    "<code>/filters unblock &lt;email&gt;</code>\n\n"
+    "<i>Blocks are by email address, matched in full: blocking "
+    "<code>lkp@intel.com</code> mutes that sender and only that sender. "
+    "Display names are not matched.</i>"
 )
 
 WELCOME_TEXT = (
@@ -48,7 +50,7 @@ WELCOME_TEXT = (
     "<code>/stop</code>    — unsubscribe\n"
     "<code>/status</code>  — check your subscription status\n"
     "<code>/lists</code>   — choose which mailing lists you receive\n"
-    "<code>/filters</code> — mute authors you don't want to see\n"
+    "<code>/filters</code> — mute senders by email address\n"
 )
 
 
@@ -91,7 +93,7 @@ class Handlers:
         if self.store.remove_subscriber(chat_id):
             await update.message.reply_text(
                 "👋 You've been unsubscribed and removed from all thread follows.\n"
-                "Your lists and blocked authors are discarded too — /start again "
+                "Your lists and blocked addresses are discarded too — /start again "
                 "re-seeds the defaults, not your old curation.\n"
                 "Send /start any time to re-subscribe."
             )
@@ -118,7 +120,7 @@ class Handlers:
             )
         else:
             lines.append(
-                f"📬 <b>{len(lists)}</b> list(s) · 🔇 <b>{len(blocks)}</b> blocked author(s)"
+                f"📬 <b>{len(lists)}</b> list(s) · 🔇 <b>{len(blocks)}</b> blocked address(es)"
             )
         lines.append(
             f"🔔 Following <b>{self.store.following_count(chat_id)}</b> thread(s) for updates."
@@ -240,14 +242,16 @@ class Handlers:
             return
 
         action = args[0].lower()
-        # Unlike a list name, an author name contains spaces — take the whole
-        # remainder as one name rather than splitting it.
-        name = " ".join(args[1:]).strip()
+        # Still joined rather than taking args[1] alone: an address never
+        # contains a space, but a user typing a display name out of habit
+        # ("block Kernel Test Robot") must get the "that's not an address"
+        # explanation below, not a confusing complaint about "Kernel".
+        target = " ".join(args[1:]).strip()
 
-        if action == "block" and name:
-            await update.message.reply_html(self._block_author(chat_id, name))
-        elif action == "unblock" and name:
-            await update.message.reply_html(self._unblock_author(chat_id, name))
+        if action == "block" and target:
+            await update.message.reply_html(self._block_author(chat_id, target))
+        elif action == "unblock" and target:
+            await update.message.reply_html(self._unblock_author(chat_id, target))
         else:
             await update.message.reply_html(FILTERS_USAGE)
 
@@ -256,30 +260,43 @@ class Handlers:
     def _render_blocks(self, chat_id: int) -> str:
         current = sorted(self.store.blocked_authors(chat_id))
         if not current:
-            body = "🔇 You have <b>no blocked authors</b>."
+            body = "🔇 You have <b>no blocked addresses</b>."
         else:
             shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in current)
-            body = f"🔇 <b>Blocked authors ({len(current)}):</b>\n{shown}"
+            body = f"🔇 <b>Blocked addresses ({len(current)}):</b>\n{shown}"
         return f"{body}\n\n{FILTERS_USAGE}"
 
-    def _block_author(self, chat_id: int, name: str) -> str:
-        if self.store.block(chat_id, name):
-            return f"✅ Blocked <code>{html.escape(name)}</code> — their threads will be hidden."
-        # block() already found the match with the same case-insensitive
-        # comparison it uses to reject the duplicate; look it up the same
-        # way here so the reply echoes the STORED casing, not whatever
-        # casing the user just typed -- otherwise the user has no way to
-        # see what is actually recorded.
-        existing = next(
-            (e for e in self.store.blocked_authors(chat_id) if e.lower() == name.lower()),
-            name,
+    def _block_author(self, chat_id: int, email: str) -> str:
+        safe = html.escape(email)
+        # Reject anything that is not address-shaped instead of storing it.
+        # A display name matches nothing under exact-address matching, so
+        # accepting one would leave the subscriber with a rule they believe
+        # works and that silently never fires -- the exact failure the
+        # migration to v3 exists to clean up.
+        if not looks_like_address(email):
+            return (
+                f"❌ <code>{safe}</code> is not an email address.\n\n"
+                "Blocks are by address now, e.g. "
+                "<code>/filters block lkp@intel.com</code>. "
+                "You can find a sender's address in the thread on lore."
+            )
+        if self.store.block(chat_id, email):
+            return (
+                f"✅ Blocked <code>{html.escape(normalize_address(email))}</code> "
+                "— their threads will be hidden."
+            )
+        # The store normalizes before comparing, so echo the normalized form
+        # here too: that is the spelling actually on record, and the user has
+        # no other way to see it.
+        return (
+            f"ℹ️ You already block "
+            f"<code>{html.escape(normalize_address(email))}</code>."
         )
-        return f"ℹ️ You already block <code>{html.escape(existing)}</code>."
 
-    def _unblock_author(self, chat_id: int, name: str) -> str:
-        safe = html.escape(name)
-        if self.store.unblock(chat_id, name):
-            return f"✅ Unblocked <code>{safe}</code>."
+    def _unblock_author(self, chat_id: int, email: str) -> str:
+        safe = html.escape(email)
+        if self.store.unblock(chat_id, email):
+            return f"✅ Unblocked <code>{html.escape(normalize_address(email))}</code>."
         return f"ℹ️ You were not blocking <code>{safe}</code>."
 
     async def scrape(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

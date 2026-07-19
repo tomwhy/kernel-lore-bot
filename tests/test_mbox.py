@@ -237,3 +237,82 @@ def test_real_malformed_fixture_author_is_decoded(fixture_text):
         if e is not None and e.id == "malformed-1@example.com"
     )
     assert first.author == "Björn Andersson"
+
+
+# The blocklist matches on the address, not the display name (see
+# filters.BlockedAuthors), so the address must survive parsing as its own
+# field rather than being discarded once a display name is present.
+
+
+def test_parse_message_keeps_the_address_alongside_the_display_name():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Dave Davis <dave@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <e1@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    entry = _single_entry(text)
+    assert entry.author == "Dave Davis"
+    assert entry.author_email == "dave@example.com"
+
+
+def test_parse_message_normalises_address_case_and_whitespace():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Dave Davis < Dave@Example.COM >\n"
+        "Subject: test\n"
+        "Message-Id: <e2@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    assert _single_entry(text).author_email == "dave@example.com"
+
+
+def test_parse_message_has_empty_address_when_from_has_none():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Anonymous Coward\n"
+        "Subject: test\n"
+        "Message-Id: <e3@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    # parseaddr() reports the bare token as the address here, so `author`
+    # falls back to it; what matters is that it never reaches author_email.
+    assert _single_entry(text).author_email == ""
+
+
+def test_parse_message_takes_the_real_address_when_the_display_name_hides_one():
+    # Same guard as the decoding test above, from the address side: the
+    # extracted address must be the envelope's, never the one smuggled into
+    # an encoded-word display name.
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: =?utf-8?b?RXZpbCA8YWRtaW5AZXhhbXBsZS5jb20+?= <real@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <e4@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    assert _single_entry(text).author_email == "real@example.com"
+
+
+def test_thread_exposes_the_root_authors_address():
+    text = (
+        "From mboxrd@z Thu Jan  1 00:00:00 1970\n"
+        "From: Root Author <root@example.com>\n"
+        "Subject: test\n"
+        "Message-Id: <r1@example.com>\n"
+        "Date: Mon, 15 Jun 2026 13:00:00 +0000\n"
+        "\n"
+        "body\n"
+    )
+    thread = mbox.parse_thread(text)
+    assert thread is not None
+    assert thread.author_email == "root@example.com"

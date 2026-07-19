@@ -28,7 +28,7 @@ PUBLIC_COMMANDS = [
     ("stop", "Unsubscribe"),
     ("status", "Check your subscription status"),
     ("lists", "Choose which mailing lists you receive"),
-    ("filters", "Manage your blocked authors"),
+    ("filters", "Manage your blocked addresses"),
 ]
 ADMIN_COMMANDS = [("scrape", "Trigger an immediate scrape")]
 

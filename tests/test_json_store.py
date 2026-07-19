@@ -135,27 +135,27 @@ def test_v1_record_is_migrated_to_defaults(tmp_path):
     assert store.followers("t@example.com") == [7]
 
 
-def test_v2_record_round_trips(tmp_path):
+def test_v3_record_round_trips(tmp_path):
     path = tmp_path / "state.json"
     store = JsonStore(path, default_lists=("netdev",))
     store.add_subscriber(7)
     store.add_lists(7, ["rcu"])
-    store.block(7, "Noisy Bot")
+    store.block(7, "noisy@bot.example.com")
 
     reloaded = JsonStore(path, default_lists=("netdev",))
 
     assert reloaded.mailing_lists(7) == {"netdev", "rcu"}
-    assert reloaded.blocked_authors(7) == {"Noisy Bot"}
+    assert reloaded.blocked_authors(7) == {"noisy@bot.example.com"}
 
 
-def test_written_file_is_version_2_and_sorted(tmp_path):
+def test_written_file_is_current_version_and_sorted(tmp_path):
     path = tmp_path / "state.json"
     store = JsonStore(path, default_lists=("netdev", "lkml"))
     store.add_subscriber(7)
 
     raw = json.loads(path.read_text(encoding="utf-8"))
 
-    assert raw["version"] == 2
+    assert raw["version"] == 3
     assert raw["subscribers"]["7"]["mailing_lists"] == ["lkml", "netdev"]
     assert raw["subscribers"]["7"]["blocked_authors"] == []
 
@@ -520,3 +520,75 @@ def test_partial_skip_backup_failure_does_not_crash_the_store(tmp_path, monkeypa
     # (c) an error is logged.
     error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert any("could not back it up" in r.getMessage() for r in error_records)
+
+
+# -- v2 -> v3: blocked_authors switched from display names to addresses -----
+# Name entries can never match under exact-address matching, so leaving them
+# in place would show subscribers blocks that silently do nothing.
+
+
+def _write_state(tmp_path, version, subscribers):
+    (tmp_path / "state.json").write_text(
+        json.dumps({"version": version, "subscribers": subscribers}, indent=2),
+        encoding="utf-8",
+    )
+
+
+def test_v2_name_blocks_are_dropped_on_load(tmp_path):
+    _write_state(tmp_path, 2, {
+        "1": {
+            "follows": [],
+            "mailing_lists": ["netdev"],
+            "blocked_authors": ["kernel test robot", "lkp@intel.com"],
+        }
+    })
+    store = JsonStore(tmp_path / "state.json")
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_v2_migration_normalises_surviving_addresses(tmp_path):
+    _write_state(tmp_path, 2, {
+        "1": {"follows": [], "mailing_lists": [], "blocked_authors": ["LKP@Intel.COM"]}
+    })
+    store = JsonStore(tmp_path / "state.json")
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_v2_record_left_with_nothing_is_reseeded_with_defaults(tmp_path):
+    """A subscriber who blocked only names demonstrably wanted something
+    muted; the new default is the closest surviving equivalent."""
+    _write_state(tmp_path, 2, {
+        "1": {"follows": [], "mailing_lists": [], "blocked_authors": ["kernel test robot"]}
+    })
+    store = JsonStore(tmp_path / "state.json", default_blocks=("lkp@intel.com",))
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_v2_deliberately_empty_blocklist_is_not_reseeded(tmp_path):
+    """An empty list means the subscriber removed everything on purpose —
+    migration must not hand them back a block they had already dropped."""
+    _write_state(tmp_path, 2, {
+        "1": {"follows": [], "mailing_lists": [], "blocked_authors": []}
+    })
+    store = JsonStore(tmp_path / "state.json", default_blocks=("lkp@intel.com",))
+    assert store.blocked_authors(1) == set()
+
+
+def test_v3_records_are_left_alone(tmp_path):
+    """Migration is keyed on the file version, so a v3 file is not re-filtered."""
+    _write_state(tmp_path, 3, {
+        "1": {"follows": [], "mailing_lists": [], "blocked_authors": ["lkp@intel.com"]}
+    })
+    store = JsonStore(tmp_path / "state.json")
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_migrated_state_is_rewritten_as_v3(tmp_path):
+    _write_state(tmp_path, 2, {
+        "1": {"follows": [], "mailing_lists": [], "blocked_authors": ["a name", "x@y.org"]}
+    })
+    store = JsonStore(tmp_path / "state.json")
+    store.add_subscriber(2)
+    written = _state(tmp_path)
+    assert written["version"] == 3
+    assert written["subscribers"]["1"]["blocked_authors"] == ["x@y.org"]

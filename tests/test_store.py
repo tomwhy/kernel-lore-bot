@@ -146,23 +146,33 @@ def test_lists_of_unknown_chat_are_empty():
     assert 999 not in store.subscribers()
 
 
+def test_block_stores_the_address_normalised():
+    """One mailbox must have exactly one spelling on disk, so that the
+    filter's exact match cannot be defeated by how the user typed it."""
+    store = InMemoryStore()
+    store.add_subscriber(1)
+
+    assert store.block(1, "  LKP@Intel.COM  ") is True
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
 def test_block_is_case_insensitively_unique():
     store = InMemoryStore()
     store.add_subscriber(1)
 
-    assert store.block(1, "Kernel Test Robot") is True
-    assert store.block(1, "kernel test robot") is False
-    assert store.blocked_authors(1) == {"Kernel Test Robot"}
+    assert store.block(1, "lkp@intel.com") is True
+    assert store.block(1, "LKP@INTEL.COM") is False
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
 
 
 def test_unblock_matches_case_insensitively():
     store = InMemoryStore()
     store.add_subscriber(1)
-    store.block(1, "Kernel Test Robot")
+    store.block(1, "lkp@intel.com")
 
-    assert store.unblock(1, "KERNEL TEST ROBOT") is True
+    assert store.unblock(1, "  LKP@Intel.COM ") is True
     assert store.blocked_authors(1) == set()
-    assert store.unblock(1, "nobody") is False
+    assert store.unblock(1, "nobody@example.com") is False
 
 
 def test_all_mailing_lists_is_the_union_across_subscribers():

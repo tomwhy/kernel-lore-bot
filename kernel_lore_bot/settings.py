@@ -30,7 +30,10 @@ DEFAULT_MAILING_LISTS: tuple[str, ...] = (
     "kernel-hardening",
 )
 
-DEFAULT_BLOCKED_AUTHORS: tuple[str, ...] = ("kernel test robot",)
+# Email addresses, not display names — matched in full against a thread's
+# From: address. lkp@intel.com is the Intel 0-day/kernel test robot, which
+# posts high-volume automated build reports.
+DEFAULT_BLOCKED_AUTHORS: tuple[str, ...] = ("lkp@intel.com",)
 
 
 @dataclass(frozen=True)
