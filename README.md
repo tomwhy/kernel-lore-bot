@@ -176,4 +176,34 @@ docker run -d \
   kernel-lore-bot
 ```
 
-Or `docker compose up -d` using the bundled `compose.yaml`.
+Or `docker compose up -d --build` using the bundled `compose.yaml`, which picks
+up the `build:` block from `compose.override.yaml` automatically.
+
+## Deploying
+
+The host runs the image from the registry, so it needs no source tree — only
+`compose.yaml`, `.env`, and `secrets/telegram_bot_token`. The latter two are
+gitignored and must be placed by hand; note `-n`, since a trailing newline in
+the token file breaks auth against the Telegram API.
+
+Build and push from a development machine:
+
+```bash
+docker build -t ghcr.io/tomwhy/kernel-lore-bot:latest .
+echo $GITHUB_TOKEN | docker login ghcr.io -u tomwhy --password-stdin
+docker push ghcr.io/tomwhy/kernel-lore-bot:latest
+```
+
+Then, on the host:
+
+```bash
+scp compose.yaml root@<host>:~/kernel-lore-bot/
+mkdir -p secrets
+echo -n '<bot-token>' > secrets/telegram_bot_token
+chmod 600 secrets/telegram_bot_token
+echo 'ADMIN_CHAT_ID=<id>' > .env
+
+docker compose up -d
+```
+
+To update: `docker compose pull && docker compose up -d`.

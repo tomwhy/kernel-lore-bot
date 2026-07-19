@@ -27,4 +27,5 @@ pytest.ini
 requirements-dev.txt
 README.md
 compose.yaml
+compose.override.yaml
 Dockerfile

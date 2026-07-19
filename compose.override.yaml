@@ -1,0 +1,10 @@
+# =============================================================
+#  Local development overrides — auto-merged by `docker compose`
+# =============================================================
+# This file is not copied to the droplet, so a deploy there resolves the
+# image from the registry instead of trying to build a source tree it lacks.
+services:
+  kernel-lore-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
