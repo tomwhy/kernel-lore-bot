@@ -39,7 +39,11 @@ class Settings:
 
     telegram_bot_token: str = PLACEHOLDER_TOKEN
     admin_chat_id: int = 0
+    # Seeds a new subscriber's own lists, and is the fallback list index when
+    # lore's manifest cannot be fetched. Does NOT decide what an existing
+    # subscriber receives — that is per-subscriber state (see /lists).
     mailing_lists: tuple[str, ...] = DEFAULT_MAILING_LISTS
+    # Seeds a new subscriber's own blocklist. See /filters.
     blocked_authors: tuple[str, ...] = DEFAULT_BLOCKED_AUTHORS
     loopback_hours: float = 4.0
     schedule_interval_hours: float = 4.0

@@ -75,21 +75,23 @@ def test_dry_run_with_only_updated_threads_says_zero_new():
 
 # -- component wiring -----------------------------------------------
 
-def test_build_components_returns_a_store_source_and_filters(tmp_path):
+def test_build_components_seeds_the_store_from_settings(tmp_path):
     settings = Settings(
         state_dir=tmp_path, mailing_lists=("netdev",), blocked_authors=("robot",)
     )
-    store, source, filters = cli.build_components(settings)
-    assert store.subscribers() == set()
-    assert source.base_url == "https://lore.kernel.org"
-    assert len(filters) == 1
-    assert filters[0].names == ("robot",)
+    store, source, registry = cli.build_components(settings)
+    store.add_subscriber(1)
+
+    assert store.mailing_lists(1) == {"netdev"}
+    assert store.blocked_authors(1) == {"robot"}
 
 
-def test_build_components_makes_no_filters_when_none_configured(tmp_path):
-    settings = Settings(state_dir=tmp_path, blocked_authors=())
-    _, _, filters = cli.build_components(settings)
-    assert filters == []
+def test_build_components_falls_back_to_the_configured_lists(tmp_path):
+    """No network here, so the registry must start on the settings fallback."""
+    settings = Settings(state_dir=tmp_path, mailing_lists=("netdev",))
+    _, _, registry = cli.build_components(settings)
+
+    assert registry.index.is_valid("netdev") is True
 
 
 # -- main(["--dry"]) --------------------------------------------------

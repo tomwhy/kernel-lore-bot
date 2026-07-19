@@ -17,28 +17,33 @@ from typing import Optional, Sequence
 from kernel_lore_bot.delivery.app import run_bot
 from kernel_lore_bot.delivery.formatting import format_thread
 from kernel_lore_bot.delivery.broadcast import Broadcaster
-from kernel_lore_bot.filters import BlockedAuthors, Filter
 from kernel_lore_bot.http import RequestsClient
 from kernel_lore_bot.models import Classified, ThreadStatus
 from kernel_lore_bot.progress import TqdmProgress
 from kernel_lore_bot.settings import PLACEHOLDER_TOKEN, Settings, load_settings
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.sources.lore.source import LoreSource
 from kernel_lore_bot.storage import JsonStore, Store
 
 log = logging.getLogger("kernel-bot")
 
 
-def build_components(settings: Settings) -> tuple[Store, LoreSource, list[Filter]]:
+def build_components(settings: Settings) -> tuple[Store, LoreSource, ListRegistry]:
     """Construct the real, I/O-touching implementations."""
-    store = JsonStore(settings.state_file)
-    source = LoreSource(
-        client=RequestsClient(timeout=settings.request_timeout),
-        progress=TqdmProgress(),
+    client = RequestsClient(timeout=settings.request_timeout)
+    store = JsonStore(
+        settings.state_file,
+        default_lists=settings.mailing_lists,
+        default_blocks=settings.blocked_authors,
     )
-    filters: list[Filter] = []
-    if settings.blocked_authors:
-        filters.append(BlockedAuthors(settings.blocked_authors))
-    return store, source, filters
+    source = LoreSource(client=client, progress=TqdmProgress())
+    # Starts on the configured lists so the bot works before the first
+    # successful manifest fetch. Deliberately NOT refreshed here:
+    # build_components must stay free of network I/O so it is testable, and
+    # the first scheduled scrape runs with `first=0` — i.e. immediately at
+    # startup — so the real index lands within seconds anyway.
+    registry = ListRegistry(client, fallback=settings.mailing_lists)
+    return store, source, registry
 
 
 def check_config(settings: Settings, dry: bool) -> list[str]:
@@ -107,7 +112,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.error("Config error: %s", err)
         return 1
 
-    store, source, filters = build_components(settings)
+    store, source, registry = build_components(settings)
 
     if args.dry:
         broadcaster = Broadcaster(settings, store, source)
@@ -121,7 +126,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     log.info("Starting Telegram bot…")
-    run_bot(settings, store, source, filters)
+    run_bot(settings, store, source, registry)
     return 0
 
 

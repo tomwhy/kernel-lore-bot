@@ -44,9 +44,11 @@ WELCOME_TEXT = (
     "🆕 = new thread  🔄 = updated thread\n\n"
     "Tap <b>🔔 Follow</b> on any thread to get notified when it receives updates.\n\n"
     "Commands:\n"
-    "<code>/start</code>  — subscribe to the daily digest\n"
-    "<code>/stop</code>   — unsubscribe\n"
-    "<code>/status</code> — check your subscription status\n"
+    "<code>/start</code>   — subscribe to the daily digest\n"
+    "<code>/stop</code>    — unsubscribe\n"
+    "<code>/status</code>  — check your subscription status\n"
+    "<code>/lists</code>   — choose which mailing lists you receive\n"
+    "<code>/filters</code> — mute authors you don't want to see\n"
 )
 
 
