@@ -51,6 +51,10 @@ class Settings:
     loopback_hours: float = 4.0
     schedule_interval_hours: float = 4.0
     request_timeout: float = 15.0
+    # lore sheds load with 503 mid-scrape; retrying costs seconds, a lost
+    # digest costs a cycle.
+    request_attempts: int = 3
+    request_backoff: float = 1.0
     state_dir: Path = Path("data")
 
     @property

@@ -30,7 +30,11 @@ log = logging.getLogger("kernel-bot")
 
 def build_components(settings: Settings) -> tuple[Store, LoreSource, ListRegistry]:
     """Construct the real, I/O-touching implementations."""
-    client = RequestsClient(timeout=settings.request_timeout)
+    client = RequestsClient(
+        timeout=settings.request_timeout,
+        max_attempts=settings.request_attempts,
+        backoff=settings.request_backoff,
+    )
     store = JsonStore(
         settings.state_file,
         default_lists=settings.mailing_lists,
