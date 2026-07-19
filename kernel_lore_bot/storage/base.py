@@ -16,15 +16,22 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from typing import Iterable, Protocol
 
+from kernel_lore_bot.filters import normalize_address
+
 log = logging.getLogger(__name__)
 
 
 @dataclass
 class Subscriber:
-    """One subscribed chat and the threads it follows."""
+    """One subscribed chat: the threads it follows, the lists it wants, and
+    the authors it has muted."""
 
     chat_id: int
     follows: set[str] = field(default_factory=set)
+    mailing_lists: set[str] = field(default_factory=set)
+    # Email addresses, normalized (stripped and lowercased) — NOT display
+    # names. Matched exactly against Thread.author_email.
+    blocked_authors: set[str] = field(default_factory=set)
 
 
 class Store(Protocol):
@@ -36,19 +43,39 @@ class Store(Protocol):
     def unfollow(self, thread_id: str, chat_id: int) -> bool: ...
     def followers(self, thread_id: str) -> list[int]: ...
     def following_count(self, chat_id: int) -> int: ...
+    def mailing_lists(self, chat_id: int) -> set[str]: ...
+    def add_lists(self, chat_id: int, names: Iterable[str]) -> set[str]: ...
+    def remove_lists(self, chat_id: int, names: Iterable[str]) -> set[str]: ...
+    def blocked_authors(self, chat_id: int) -> set[str]: ...
+    def block(self, chat_id: int, email: str) -> bool: ...
+    def unblock(self, chat_id: int, email: str) -> bool: ...
+    def all_mailing_lists(self) -> set[str]: ...
+    def all_followed_threads(self) -> set[str]: ...
 
 
 class BaseStore:
     """In-memory implementation of Store. Subclasses add persistence via _flush."""
 
-    def __init__(self, subs: dict[int, Subscriber] | None = None) -> None:
-        # Copy each Subscriber (and its mutable follows set) so a caller's
+    def __init__(
+        self,
+        subs: dict[int, Subscriber] | None = None,
+        default_lists: Iterable[str] = (),
+        default_blocks: Iterable[str] = (),
+    ) -> None:
+        # Copy each Subscriber and every mutable set it owns so a caller's
         # objects are not aliased into our state. `replace` rather than
         # Subscriber(...) so fields added later are carried over for free.
         self._subs: dict[int, Subscriber] = {
-            sub.chat_id: replace(sub, follows=set(sub.follows))
+            sub.chat_id: replace(
+                sub,
+                follows=set(sub.follows),
+                mailing_lists=set(sub.mailing_lists),
+                blocked_authors=set(sub.blocked_authors),
+            )
             for sub in (subs or {}).values()
         }
+        self._default_lists = frozenset(default_lists)
+        self._default_blocks = frozenset(default_blocks)
         self._index: dict[str, set[int]] = defaultdict(set)
         for chat, sub in self._subs.items():
             for thread_id in sub.follows:
@@ -71,12 +98,46 @@ class BaseStore:
         sub = self._subs.get(chat_id)
         return len(sub.follows) if sub else 0
 
+    def mailing_lists(self, chat_id: int) -> set[str]:
+        sub = self._subs.get(chat_id)
+        return set(sub.mailing_lists) if sub else set()
+
+    def blocked_authors(self, chat_id: int) -> set[str]:
+        sub = self._subs.get(chat_id)
+        return set(sub.blocked_authors) if sub else set()
+
+    def all_mailing_lists(self) -> set[str]:
+        """Every list at least one subscriber wants — the scrape's scope.
+
+        Scans subscribers rather than keeping an index: this runs once per
+        scrape, not once per delivered message, so it is not a hot path.
+        """
+        union: set[str] = set()
+        for sub in self._subs.values():
+            union |= sub.mailing_lists
+        return union
+
+    def all_followed_threads(self) -> set[str]:
+        """Every thread id at least one subscriber follows -- the by-id
+        scrape's scope.
+
+        `self._index` is already keyed on exactly this set (follow/unfollow/
+        remove_subscriber(s) keep it in sync, dropping a key once its
+        follower set is empty), so this returns its keys directly rather
+        than rescanning `self._subs` the way all_mailing_lists() does.
+        """
+        return set(self._index)
+
     # -- writes --------------------------------------------------------
 
     def add_subscriber(self, chat_id: int) -> bool:
         if chat_id in self._subs:
             return False
-        self._subs[chat_id] = Subscriber(chat_id)
+        self._subs[chat_id] = Subscriber(
+            chat_id,
+            mailing_lists=set(self._default_lists),
+            blocked_authors=set(self._default_blocks),
+        )
         self._flush()
         log.info("New subscriber: chat_id=%d (total: %d)", chat_id, len(self._subs))
         return True
@@ -112,7 +173,13 @@ class BaseStore:
             self._flush()
 
     def follow(self, thread_id: str, chat_id: int) -> bool:
-        sub = self._subs.setdefault(chat_id, Subscriber(chat_id))
+        if chat_id not in self._subs:
+            self._subs[chat_id] = Subscriber(
+                chat_id,
+                mailing_lists=set(self._default_lists),
+                blocked_authors=set(self._default_blocks),
+            )
+        sub = self._subs[chat_id]
         if thread_id in sub.follows:
             return False
         sub.follows.add(thread_id)
@@ -133,4 +200,57 @@ class BaseStore:
                 del self._index[thread_id]
         self._flush()
         log.info("chat_id=%d unfollowed thread %s", chat_id, thread_id)
+        return True
+
+    def add_lists(self, chat_id: int, names: Iterable[str]) -> set[str]:
+        sub = self._subs.get(chat_id)
+        if sub is None:
+            return set()
+        added = {name for name in names if name not in sub.mailing_lists}
+        if not added:
+            return set()
+        sub.mailing_lists |= added
+        self._flush()
+        log.info("chat_id=%d added list(s): %s", chat_id, ", ".join(sorted(added)))
+        return added
+
+    def remove_lists(self, chat_id: int, names: Iterable[str]) -> set[str]:
+        sub = self._subs.get(chat_id)
+        if sub is None:
+            return set()
+        removed = {name for name in names if name in sub.mailing_lists}
+        if not removed:
+            return set()
+        sub.mailing_lists -= removed
+        self._flush()
+        log.info("chat_id=%d removed list(s): %s", chat_id, ", ".join(sorted(removed)))
+        return removed
+
+    def block(self, chat_id: int, email: str) -> bool:
+        sub = self._subs.get(chat_id)
+        if sub is None:
+            return False
+        # Store one spelling per mailbox. filters.BlockedAuthors matches the
+        # address exactly, so two casings would otherwise be two rules that
+        # behave identically -- and the second would look like it did
+        # nothing. Normalizing on the way in keeps the stored value and the
+        # matched value the same string.
+        address = normalize_address(email)
+        if not address or address in sub.blocked_authors:
+            return False
+        sub.blocked_authors.add(address)
+        self._flush()
+        log.info("chat_id=%d blocked address %r", chat_id, address)
+        return True
+
+    def unblock(self, chat_id: int, email: str) -> bool:
+        sub = self._subs.get(chat_id)
+        if sub is None:
+            return False
+        address = normalize_address(email)
+        if address not in sub.blocked_authors:
+            return False
+        sub.blocked_authors.discard(address)
+        self._flush()
+        log.info("chat_id=%d unblocked address %r", chat_id, address)
         return True

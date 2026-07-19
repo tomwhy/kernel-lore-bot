@@ -135,6 +135,23 @@ followers regardless of their lists or blocks. They asked for that specific
 thread by name, and a follow that silently stops firing because the list was
 dropped would be worse than the noise.
 
+**Amendment (2026-07-18, after Task 6 review).** The two rules above were
+inconsistent as first written. Scoping the scrape to the union of subscribers'
+*lists* means a followed thread outside that union is never fetched, so
+`_notify_followers` never sees it — a subscriber with zero lists lost every
+follow notification, silently and permanently. Reachable in practice:
+`remove_lists` has no last-list guard and the v2 format deliberately persists
+zero-lists as a real state.
+
+Resolved by widening the scrape: after the list scrape, every followed thread
+is fetched directly by Message-ID via the `/all/<msgid>/t.mbox.gz` endpoint
+`LoreSource` already uses, and merged into the same result set (unioning
+`mailing_lists` for a thread both paths found). A follow now keeps working
+regardless of what happens to the follower's lists, which is what the
+principle claimed all along. Cost: one extra mbox request per followed thread
+per run, so this scales with total follows across all subscribers — the
+`Store` exposes the deduplicated union, not a per-subscriber list.
+
 There is no global filter anymore: `DEFAULT_BLOCKED_AUTHORS` is only the seed
 for a new subscriber's personal list, which means a user can unblock the kernel
 test robot if they genuinely want it. Consequently the `filters` parameter

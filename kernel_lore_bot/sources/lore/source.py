@@ -1,10 +1,12 @@
 """
 LoreSource: the only Source implementation.
 
-Walks each configured list's `new.atom` backwards in time, and for every entry
-newer than the cutoff downloads that thread's full mbox and parses it into a
-Thread. Threads are deduplicated across lists by message-id, since one thread is
-frequently posted to several lists.
+Walks each given mailing list's `new.atom` backwards in time, and for every
+entry newer than the cutoff downloads that thread's full mbox and parses it
+into a Thread. Threads are deduplicated across lists by message-id, since one
+thread is frequently posted to several lists, and a thread found on more than
+one list has its mailing list names unioned rather than the later fetch
+overwriting the earlier one.
 """
 
 from __future__ import annotations
@@ -12,8 +14,9 @@ from __future__ import annotations
 import gzip
 import logging
 import zlib
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional, Sequence
 
 from kernel_lore_bot.http import FetchError, HttpClient
 from kernel_lore_bot.models import Thread
@@ -37,36 +40,83 @@ class LoreSource:
     def __init__(
         self,
         client: HttpClient,
-        mailing_lists: tuple[str, ...],
         progress: Progress | None = None,
         base_url: str = mbox_parser.LORE_BASE_URL,
     ) -> None:
         self.client = client
-        self.mailing_lists = tuple(mailing_lists)
         self.progress = progress if progress is not None else NullProgress()
         self.base_url = base_url.rstrip("/")
 
     # -- public API ---------------------------------------------------
 
-    def fetch_threads(self, since: datetime) -> Iterator[Thread]:
-        """Yield every thread with activity at or after `since`, deduplicated."""
-        seen: set[str] = set()
+    def fetch_threads(
+        self, since: datetime, mailing_lists: Sequence[str]
+    ) -> list[Thread]:
+        """
+        Every thread with activity at or after `since`, deduplicated.
 
-        for list_name in self.mailing_lists:
+        A thread cross-posted to several lists is downloaded once and carries
+        all of their names. That means results cannot be yielded as they are
+        found — a later list may add to a thread already seen — so this
+        collects fully before returning.
+        """
+        # node Message-ID -> root Message-ID of the thread that contains it.
+        # Keyed on every node, not just roots, so a reply appearing in a feed
+        # resolves to its thread instead of triggering a second download.
+        seen: dict[str, str] = {}
+        threads: dict[str, Thread] = {}
+
+        for list_name in mailing_lists:
             with self.progress.bar(f"  {list_name}") as bar:
                 for feed_entry in self._iter_feed_entries(list_name, since):
                     bar.update(1)
 
-                    if feed_entry.entry_id in seen:
+                    root_id = seen.get(feed_entry.entry_id)
+                    if root_id is not None:
+                        existing = threads.get(root_id)
+                        if existing is not None:
+                            threads[root_id] = replace(
+                                existing,
+                                mailing_lists=existing.mailing_lists | {list_name},
+                            )
                         continue
 
                     thread = self._fetch_thread(feed_entry.entry_id, list_name)
                     if thread is None:
-                        seen.add(feed_entry.entry_id)
+                        # Remember the failure so the next list does not retry it.
+                        seen[feed_entry.entry_id] = ""
                         continue
 
-                    seen.update(node.entry.id for node in thread.walk())
-                    yield thread
+                    existing = threads.get(thread.id)
+                    if existing is not None:
+                        thread = replace(
+                            thread, mailing_lists=existing.mailing_lists | thread.mailing_lists
+                        )
+                    threads[thread.id] = thread
+                    for node in thread.walk():
+                        seen[node.entry.id] = thread.id
+
+        return list(threads.values())
+
+    def fetch_threads_by_id(self, ids: Iterable[str]) -> list[Thread]:
+        """
+        Fetch each given Message-ID as its own thread, by id rather than by
+        feed. No `since` filter -- every id is downloaded unconditionally.
+
+        Used for a subscriber's followed threads, which may lie outside
+        every mailing list any subscriber currently wants (see
+        Broadcaster.collect). `list_name=""` means the resulting Thread's
+        mailing_lists is always frozenset() -- a thread reached this way has
+        no known list, and does not need one: followers bypass visible_for
+        entirely. A fetch that fails is skipped (already logged by
+        _fetch_thread) rather than aborting the rest.
+        """
+        threads = []
+        for entry_id in ids:
+            thread = self._fetch_thread(entry_id, "")
+            if thread is not None:
+                threads.append(thread)
+        return threads
 
     # -- internals ----------------------------------------------------
 
@@ -124,20 +174,25 @@ class LoreSource:
             log.warning("Could not fetch mbox %s: %s", url, exc)
             return None
 
-        try:
-            raw = gzip.decompress(raw)
-        except gzip.BadGzipFile:
-            pass  # server sent an uncompressed mbox; use the bytes as-is
-        except (EOFError, zlib.error) as exc:
-            # Any other way a gzip body can be broken: EOFError for a truncated
-            # stream (connection cut mid-download, neither BadGzipFile nor
-            # OSError so it must be caught by name), zlib.error for corruption
-            # mid-stream (e.g. a flipped bit) that isn't a header/CRC problem.
-            # This except clause runs only when the body IS gzip-shaped but
-            # broken -- the BadGzipFile clause above already claimed the
-            # "not gzip at all" case, so that plaintext fallback is untouched.
-            log.warning("Corrupted/truncated gzip mbox at %s: %s", url, exc)
-            return None
+        # Whether the body is gzip at all is decided by its magic bytes, not
+        # by which exception gzip.decompress happens to raise: a gzip-shaped
+        # body with a corrupted CRC32/length trailer (e.g. one flipped bit
+        # from a flaky mirror) also raises gzip.BadGzipFile, same as a body
+        # with no gzip header at all. Only the latter is genuinely already-
+        # decompressed plaintext (some mirrors serve uncompressed mboxes);
+        # the former is a corrupt download and must be reported as such, not
+        # silently handed to the parser where it looks like an empty thread.
+        # index.py's fetch_list_names has this identical check.
+        if raw[:2] == b"\x1f\x8b":
+            try:
+                raw = gzip.decompress(raw)
+            except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+                # BadGzipFile: corrupted header or CRC/length trailer.
+                # EOFError: a truncated stream (connection cut mid-download).
+                # zlib.error: corruption mid-stream (e.g. a flipped bit) that
+                # isn't a header/CRC problem.
+                log.warning("Corrupted gzip mbox at %s: %s", url, exc)
+                return None
 
         thread = mbox_parser.parse_thread(
             raw.decode("utf-8", errors="replace"), list_name, base_url=self.base_url

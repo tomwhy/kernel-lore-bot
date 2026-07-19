@@ -21,9 +21,9 @@ def _entry(msg_id, updated, title="A patch", author="Alice Adams", url=None):
     )
 
 
-def _thread(updated=None, mailing_list="netdev", children=(), **kw):
+def _thread(updated=None, mailing_lists=frozenset({"netdev"}), children=(), **kw):
     root = Node(entry=_entry("root@x.com", updated or CUTOFF, **kw), children=children)
-    return Thread(roots=(root,), mailing_list=mailing_list)
+    return Thread(roots=(root,), mailing_lists=frozenset(mailing_lists))
 
 
 def _new(thread):
@@ -48,8 +48,13 @@ def test_updated_thread_uses_the_updated_badge():
 
 
 def test_mailing_list_line_is_omitted_when_empty():
-    text = format_thread(_new(_thread(mailing_list="")), CUTOFF)
+    text = format_thread(_new(_thread(mailing_lists=frozenset())), CUTOFF)
     assert "📬" not in text
+
+
+def test_all_mailing_lists_are_shown_sorted():
+    text = format_thread(_new(_thread(mailing_lists={"netdev", "lkml"})), CUTOFF)
+    assert "📬 lkml, netdev" in text
 
 
 def test_entry_count_line_is_omitted_when_nothing_is_new():
@@ -96,7 +101,7 @@ def test_update_notification_layout_is_exact():
 
 
 def test_update_notification_omits_empty_mailing_list():
-    assert "📬" not in format_update_notification(_thread(mailing_list=""))
+    assert "📬" not in format_update_notification(_thread(mailing_lists=frozenset()))
 
 
 def test_header_layout_is_exact():

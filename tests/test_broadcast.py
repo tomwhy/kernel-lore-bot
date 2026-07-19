@@ -6,44 +6,108 @@ from datetime import datetime, timedelta, timezone
 from telegram.error import BadRequest, Forbidden
 
 from kernel_lore_bot.delivery.broadcast import Broadcaster
-from kernel_lore_bot.filters import BlockedAuthors
-from kernel_lore_bot.models import Entry, Node, Thread
+from kernel_lore_bot.delivery.handlers import Handlers
+from kernel_lore_bot.models import Entry, Node, Reply, Thread
 from kernel_lore_bot.settings import Settings
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import InMemoryStore
 
-from .conftest import FakeBot
+from .conftest import FakeBot, FakeContext, FakeHttpClient, FakeUpdate
 
 NOW = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
 
 
-def _thread(msg_id, updated, author="Alice Adams", mailing_list="netdev"):
+def _thread(
+    msg_id,
+    updated,
+    author="Alice Adams",
+    author_email="alice@example.com",
+    mailing_lists=frozenset({"netdev"}),
+    root_age_hours=None,
+):
+    """
+    Build a one-node thread.
+
+    `updated` is the root's timestamp. When `root_age_hours` is given, it
+    instead names how many hours *before* `updated` the root actually landed
+    — the one mechanism the whole file uses to build a thread that classifies
+    as UPDATED (root older than the cutoff). Existing callers that pass an
+    already-old `updated` directly keep working unchanged.
+    """
+    if root_age_hours is not None:
+        updated = updated - timedelta(hours=root_age_hours)
     entry = Entry(
         id=msg_id,
         title=f"[PATCH] {msg_id}",
         url=f"https://lore.kernel.org/all/{msg_id}",
         author=author,
+        author_email=author_email,
         updated=updated,
         reply=None,
     )
-    return Thread(roots=(Node(entry=entry),), mailing_list=mailing_list)
+    return Thread(roots=(Node(entry=entry),), mailing_lists=frozenset(mailing_lists))
+
+
+def _thread_with_reply(
+    root_id,
+    root_updated,
+    reply_id,
+    reply_updated,
+    author="Alice Adams",
+    mailing_lists=frozenset(),
+):
+    """
+    A two-node thread: a root plus one reply.
+
+    Used for the by-id-fetch tests, where a thread needs an old root (so
+    classify() calls it UPDATED, not NEW) but a reply at/after the cutoff (so
+    it also has genuine activity, per count_entries_since).
+    """
+    root_entry = Entry(
+        id=root_id,
+        title=f"[PATCH] {root_id}",
+        url=f"https://lore.kernel.org/all/{root_id}",
+        author=author,
+        updated=root_updated,
+        reply=None,
+    )
+    reply_entry = Entry(
+        id=reply_id,
+        title=f"Re: [PATCH] {root_id}",
+        url=f"https://lore.kernel.org/all/{reply_id}",
+        author=author,
+        updated=reply_updated,
+        reply=Reply(ref=root_id),
+    )
+    root = Node(entry=root_entry, children=(Node(entry=reply_entry),))
+    return Thread(roots=(root,), mailing_lists=frozenset(mailing_lists))
 
 
 class FakeSource:
-    def __init__(self, threads):
+    def __init__(self, threads, by_id=None):
         self.threads = threads
+        # entry_id -> Thread. An id with no entry here simulates a fetch
+        # failure (LoreSource._fetch_thread returns None and logs, rather
+        # than raising) -- fetch_threads_by_id must skip it, not crash.
+        self.by_id = dict(by_id or {})
         self.calls = []
+        self.by_id_calls = []
 
-    def fetch_threads(self, since):
+    def fetch_threads(self, since, mailing_lists):
         self.calls.append(since)
         return list(self.threads)
 
+    def fetch_threads_by_id(self, ids):
+        ids = list(ids)
+        self.by_id_calls.append(ids)
+        return [self.by_id[i] for i in ids if i in self.by_id]
 
-def _broadcaster(threads, store, filters=()):
+
+def _broadcaster(threads, store):
     return Broadcaster(
         settings=Settings(loopback_hours=4),
         store=store,
         source=FakeSource(threads),
-        filters=filters,
     )
 
 
@@ -56,8 +120,19 @@ async def test_no_subscribers_means_nothing_is_fetched():
     assert source.calls == []
 
 
-async def test_no_threads_means_nothing_is_sent():
+async def test_nothing_is_fetched_when_no_subscriber_wants_a_list():
     store = InMemoryStore()
+    store.add_subscriber(1)  # subscribed, but zero lists
+
+    source = FakeSource([])
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(FakeBot(), now=NOW)
+
+    assert source.calls == []
+
+
+async def test_no_threads_means_nothing_is_sent():
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
     await _broadcaster([], store).run(bot, now=NOW)
@@ -74,7 +149,7 @@ def test_cutoff_is_loopback_hours_before_now():
 # -- new threads ----------------------------------------------------
 
 async def test_new_thread_is_broadcast_to_every_subscriber():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     bot = FakeBot()
@@ -90,7 +165,7 @@ async def test_new_thread_is_broadcast_to_every_subscriber():
 
 
 async def test_new_thread_message_carries_a_follow_button():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -101,7 +176,7 @@ async def test_new_thread_message_carries_a_follow_button():
 
 
 async def test_thread_messages_are_sent_as_html_without_link_previews():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -111,10 +186,97 @@ async def test_thread_messages_are_sent_as_html_without_link_previews():
     assert bot.sent[1]["disable_web_page_preview"] is True
 
 
+# -- per-subscriber routing ------------------------------------------
+
+
+async def test_each_subscriber_gets_only_their_own_lists():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["rcu"])
+
+    threads = [
+        _thread("net@example.com", NOW, mailing_lists={"netdev"}),
+        _thread("rcu@example.com", NOW, mailing_lists={"rcu"}),
+    ]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert any("net@example.com" in t for t in bot.texts_to(1))
+    assert not any("rcu@example.com" in t for t in bot.texts_to(1))
+    assert any("rcu@example.com" in t for t in bot.texts_to(2))
+    assert not any("net@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_cross_posted_thread_reaches_both_subscribers():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["lkml"])
+
+    threads = [_thread("x@example.com", NOW, mailing_lists={"netdev", "lkml"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert any("x@example.com" in t for t in bot.texts_to(1))
+    assert any("x@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_personal_block_hides_a_thread_from_only_that_subscriber():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+    store.block(1, "lkp@intel.com")
+
+    threads = [
+        _thread(
+            "bot@example.com", NOW,
+            author="Kernel Test Robot", author_email="lkp@intel.com",
+        )
+    ]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert bot.texts_to(1) == []
+    assert any("bot@example.com" in t for t in bot.texts_to(2))
+
+
+async def test_a_subscriber_with_nothing_visible_gets_no_header():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["rcu"])
+
+    threads = [_thread("net@example.com", NOW, mailing_lists={"netdev"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert bot.texts_to(1) == []
+
+
+async def test_the_header_counts_only_what_that_subscriber_sees():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.add_subscriber(2)
+    store.add_lists(2, ["netdev", "rcu"])
+
+    threads = [
+        _thread("net@example.com", NOW, mailing_lists={"netdev"}),
+        _thread("rcu@example.com", NOW, mailing_lists={"rcu"}),
+    ]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    assert "<b>1</b> new thread(s)" in bot.texts_to(1)[0]
+    assert "<b>2</b> new thread(s)" in bot.texts_to(2)[0]
+
+
 # -- updated threads ------------------------------------------------
 
 async def test_updated_thread_notifies_only_its_followers():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     store.follow("old@x.com", 2)
@@ -131,7 +293,7 @@ async def test_updated_thread_notifies_only_its_followers():
 
 
 async def test_updated_thread_with_no_followers_sends_nothing():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
 
@@ -141,7 +303,7 @@ async def test_updated_thread_with_no_followers_sends_nothing():
 
 
 async def test_no_digest_header_when_only_updated_threads_exist():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 1)
     bot = FakeBot()
 
@@ -150,20 +312,173 @@ async def test_no_digest_header_when_only_updated_threads_exist():
     assert not any("Kernel Lore Digest" in t for t in bot.texts_to(1))
 
 
-# -- filters --------------------------------------------------------
-
-async def test_blocked_authors_never_reach_subscribers():
+async def test_followers_are_notified_about_threads_outside_their_lists():
+    """An explicit follow outranks the follower's list and block settings."""
     store = InMemoryStore()
     store.add_subscriber(1)
+    store.add_lists(1, ["rcu"])
+    store.follow("old@example.com", 1)
+    store.block(1, "alice@example.com")
+
+    # count_entries_since(updated, cutoff) is 0 here (single node, root well
+    # before cutoff) yet this still notifies: it arrives via the LIST scrape
+    # (FakeSource(threads) below, i.e. source.fetch_threads), whose freshness
+    # is guaranteed for free by the atom feed's `since` filter, not the by-id
+    # path where collect() must check count_entries_since() itself.
+    updated = _thread("old@example.com", NOW, mailing_lists={"netdev"}, root_age_hours=48)
+    bot = FakeBot()
+    await _broadcaster([updated], store).run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+# -- following a non-root node id (finding 1) ------------------------
+#
+# store.followers(thread.id) only ever looked up the ROOT id. A subscriber
+# can hold a follow on a non-root node -- e.g. mbox.py treats an entry whose
+# In-Reply-To ref is absent from the mbox as a root, and it can later turn
+# out to be a reply once its parent is archived; or a thread can split into
+# multiple roots, of which Thread.id only names roots[0]. Either way, that
+# follower must still see the thread's updates.
+
+
+async def test_a_follower_of_a_reply_id_is_notified_when_the_thread_updates():
+    """A follow held on a non-root node id must still see the thread's updates."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_a_chat_following_both_root_and_reply_is_notified_only_once():
+    """One chat following two node ids of the same thread gets one message."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("root@x.com", 1)
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert len(bot.texts_to(1)) == 1
+
+
+async def test_unfollow_button_for_a_reply_only_follower_carries_the_reply_id():
+    """
+    A chat following only a reply id must get an unfollow button for THAT
+    id, not the thread's root id it never held. Before the fix, the button
+    always carried the root id, so pressing it produced "You weren't
+    following this thread" while the real follow stayed in place and the
+    chat had no way to stop the notifications (there is no /following
+    command; /stop drops the whole subscription).
+
+    Driven end-to-end through the real button handler, not just asserted on
+    the markup, since the point of the fix is that pressing the button
+    actually works.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    callback_data = markup.inline_keyboard[0][0].callback_data
+    assert callback_data == "unfollow:reply@x.com"
+
+    handlers = Handlers(
+        settings=Settings(),
+        store=store,
+        list_registry=ListRegistry(FakeHttpClient({}), "https://lore.example.org"),
+    )
+    update = FakeUpdate(chat_id=1, callback_data=callback_data)
+    context = FakeContext()
+    await handlers.on_button(update, context)
+
+    assert store.followers("reply@x.com") == []
+    assert "Unfollowed" in context.bot.texts_to(1)[0]
+
+
+async def test_unfollow_button_for_a_root_follower_carries_the_root_id():
+    """The common case must not regress: a chat following the root gets a
+    button for the root id."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("old@x.com", 1)
+
+    old = _thread("old@x.com", NOW - timedelta(hours=10))
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    assert markup.inline_keyboard[0][0].callback_data == "unfollow:old@x.com"
+
+
+async def test_unfollow_button_prefers_the_root_id_when_the_chat_holds_both():
+    """A chat following both the root and a reply gets a button carrying the
+    root id -- the id every other part of the UI treats as canonical."""
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("root@x.com", 1)
+    store.follow("reply@x.com", 1)
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    bot = FakeBot()
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    markup = bot.sent[0]["reply_markup"]
+    assert markup.inline_keyboard[0][0].callback_data == "unfollow:root@x.com"
+
+
+async def test_forbidden_prunes_the_reply_follow_the_chat_actually_holds():
+    """
+    A chat that follows a reply id, not the root, must have that reply follow
+    removed on Forbidden -- unfollowing the root id (which it never held)
+    would leave the real follow in place and the chat would be retried on
+    every future run.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.follow("reply@x.com", 5)
+    bot = FakeBot(fail_for={5})
+
+    old = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=10), "reply@x.com", NOW
+    )
+    await _broadcaster([old], store).run(bot, now=NOW)
+
+    assert store.followers("reply@x.com") == []
+
+
+# -- blocked authors --------------------------------------------------
+
+async def test_blocked_authors_never_reach_subscribers():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.block(1, "lkp@intel.com")
     bot = FakeBot()
 
     threads = [
-        _thread("bot@x.com", NOW, author="kernel test robot"),
-        _thread("human@x.com", NOW, author="Linus Torvalds"),
+        _thread(
+            "bot@x.com", NOW,
+            author="Kernel Test Robot", author_email="lkp@intel.com",
+        ),
+        _thread(
+            "human@x.com", NOW,
+            author="Linus Torvalds", author_email="torvalds@linux-foundation.org",
+        ),
     ]
-    await _broadcaster(threads, store, filters=[BlockedAuthors(("kernel test robot",))]).run(
-        bot, now=NOW
-    )
+    await _broadcaster(threads, store).run(bot, now=NOW)
 
     body = "\n".join(bot.texts_to(1))
     assert "human@x.com" in body
@@ -174,7 +489,7 @@ async def test_blocked_authors_never_reach_subscribers():
 # -- blocked subscribers --------------------------------------------
 
 async def test_a_chat_that_blocked_the_bot_is_removed():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     store.follow("t1", 1)
@@ -187,7 +502,7 @@ async def test_a_chat_that_blocked_the_bot_is_removed():
 
 
 async def test_a_blocked_chat_is_not_retried_for_later_threads():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot(fail_for={1})
 
@@ -200,7 +515,7 @@ async def test_a_blocked_chat_is_not_retried_for_later_threads():
 
 
 async def test_a_follower_who_blocked_the_bot_is_unfollowed():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 5)
     bot = FakeBot(fail_for={5})
 
@@ -208,6 +523,239 @@ async def test_a_follower_who_blocked_the_bot_is_unfollowed():
     await _broadcaster([old], store).run(bot, now=NOW)
 
     assert store.followers("old@x.com") == []
+
+
+# -- fetching followed threads by id (task 6b) -----------------------
+#
+# Task 6 scoped the scrape to store.all_mailing_lists() -- the union of
+# subscribers' *lists*. A followed thread outside every list any subscriber
+# wants was never fetched, never classified, and _notify_followers never saw
+# it: a subscriber with zero lists who follows a thread got permanent
+# silence. Broadcaster.collect now also fetches followed threads directly by
+# Message-ID and merges them into the same result set.
+
+
+async def test_zero_lists_follower_is_notified_when_followed_thread_updates():
+    """The regression this task exists to fix."""
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)  # zero lists -- follow() auto-subscribes
+
+    followed = _thread_with_reply(
+        "f@x.com", NOW - timedelta(hours=48), "reply@x.com", NOW
+    )
+    source = FakeSource([], by_id={"f@x.com": followed})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_followed_thread_with_no_activity_since_cutoff_sends_nothing():
+    """
+    Every followed thread is now fetched on every run, whether or not
+    anything happened. classify() labels a thread UPDATED purely because its
+    root predates the cutoff -- it does not check whether any node is
+    actually new. Without collect() filtering fetched-by-id threads on
+    count_entries_since(), this follower would get a notification on every
+    single scrape forever, even though the thread never moved.
+    """
+    store = InMemoryStore()
+    store.follow("stale@x.com", 1)
+
+    stale = _thread("stale@x.com", NOW - timedelta(days=2))  # no new activity
+    source = FakeSource([], by_id={"stale@x.com": stale})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert bot.sent == []
+
+
+async def test_thread_in_both_list_scrape_and_follows_is_fetched_once():
+    """
+    "both@x.com" is reachable two ways: the list scrape (subscriber 1's
+    "netdev" list) and the follow set (subscriber 1 also follows it). It
+    must be fetched only via the list scrape -- the by-id path is skipped
+    entirely -- and the single resulting thread still carries its list name.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.follow("both@x.com", 1)
+
+    # Old root (so it classifies UPDATED and _notify_followers sends it),
+    # reached only through the list scrape.
+    scraped = _thread("both@x.com", NOW, mailing_lists={"netdev"}, root_age_hours=48)
+    source = FakeSource([scraped], by_id={"both@x.com": scraped})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert source.by_id_calls == []  # never refetched by id -- already covered
+    texts = bot.texts_to(1)
+    assert any("both@x.com" in t and "netdev" in t for t in texts)
+
+
+async def test_a_followed_id_that_is_a_reply_in_an_already_fetched_thread_is_not_refetched():
+    """
+    A followed id may be a reply inside a thread the list scrape already
+    pulled in whole, not just a followed root. Coverage must be checked
+    against every node's Message-ID, not just thread ids.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.follow("reply-in-thread@x.com", 1)
+
+    scraped = _thread_with_reply(
+        "root@x.com",
+        NOW - timedelta(hours=48),
+        "reply-in-thread@x.com",
+        NOW,
+        mailing_lists={"netdev"},
+    )
+    source = FakeSource([scraped], by_id={"reply-in-thread@x.com": scraped})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert source.by_id_calls == []
+
+
+async def test_a_failed_followed_fetch_does_not_affect_a_second_healthy_one():
+    store = InMemoryStore()
+    store.follow("dead@x.com", 1)
+    store.follow("alive@x.com", 1)
+
+    alive = _thread_with_reply(
+        "alive@x.com", NOW - timedelta(hours=48), "reply@x.com", NOW
+    )
+    # "dead@x.com" has no route in by_id: FakeSource skips it, simulating
+    # LoreSource._fetch_thread returning None on a FetchError.
+    source = FakeSource([], by_id={"alive@x.com": alive})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("alive@x.com" in t for t in bot.texts_to(1))
+
+
+async def test_two_followed_ids_in_the_same_off_list_thread_notify_only_once():
+    """
+    Two different followed ids can resolve to the same off-list thread --
+    e.g. one chat follows the root and also follows one of its replies, and
+    the thread is on no list any subscriber wants. Each id is looked up
+    separately by Message-ID (lore's mbox endpoint returns the whole thread
+    for either), but only one copy may reach classify(), or that chat gets
+    the update notification twice.
+    """
+    store = InMemoryStore()
+    store.follow("root@x.com", 1)
+    store.follow("reply@x.com", 1)
+
+    thread = _thread_with_reply(
+        "root@x.com", NOW - timedelta(hours=48), "reply@x.com", NOW
+    )
+    source = FakeSource([], by_id={"root@x.com": thread, "reply@x.com": thread})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert len(bot.texts_to(1)) == 1
+
+
+async def test_nothing_is_fetched_when_there_are_no_lists_and_no_follows():
+    store = InMemoryStore()
+    store.add_subscriber(1)  # zero lists, zero follows
+
+    source = FakeSource([])
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(FakeBot(), now=NOW)
+
+    assert source.calls == []
+    assert source.by_id_calls == []
+
+
+async def test_zero_lists_follower_of_a_fresh_root_off_list_thread_is_notified():
+    """
+    Finding 1: fetch_threads_by_id gives a followed thread mailing_lists=
+    frozenset(). classify() labels NEW vs UPDATED purely from the root's
+    timestamp, with no idea the thread arrived via the by-id path. When the
+    root happens to be NEWER than cutoff, classify() calls it NEW, which
+    _run_locked routes to _send_digest -- but visible_for() can never show an
+    empty-mailing_lists thread to anyone (the intersection is always empty),
+    and _notify_followers only ever looks at `updated`. So a listless
+    followed thread with a fresh root reached nobody at all, even though it
+    was fetched successfully and passed the count_entries_since gate.
+    """
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)  # zero lists -- follow() auto-subscribes
+
+    # Root newer than cutoff (NOW), single node so count_entries_since > 0.
+    followed = _thread("f@x.com", NOW, mailing_lists=frozenset())
+    source = FakeSource([], by_id={"f@x.com": followed})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_zero_lists_follower_of_an_old_root_off_list_thread_is_still_notified():
+    """The existing older-root case (already covered by
+    test_zero_lists_follower_is_notified_when_followed_thread_updates) must
+    keep working after the fix -- restated here as the direct sibling of the
+    fresh-root case above, so the two are read together."""
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)
+
+    followed = _thread_with_reply(
+        "f@x.com", NOW - timedelta(hours=48), "reply@x.com", NOW
+    )
+    source = FakeSource([], by_id={"f@x.com": followed})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_a_follower_of_an_on_list_new_thread_gets_one_digest_copy_and_no_notification():
+    """
+    A subscriber who has the thread's list AND follows it must get exactly
+    one message -- the digest copy -- and not also an update notification.
+    The new/updated split must not double-fire for a thread that has real
+    mailing_lists and is genuinely NEW.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.follow("a@x.com", 1)
+
+    threads = [_thread("a@x.com", NOW, mailing_lists={"netdev"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    # Header + one thread message from the digest; no separate "Thread
+    # update" notification.
+    assert len(bot.texts_to(1)) == 2
+    assert not any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_the_scrape_runs_for_follows_even_with_no_lists():
+    """The list scrape (source.fetch_threads) still runs -- with an empty
+    mailing_lists sequence -- when there are follows but no lists, since the
+    followed-id fetch alone must not skip the guard that also protects the
+    list-scrape call."""
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)
+
+    source = FakeSource([])
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(FakeBot(), now=NOW)
+
+    assert source.calls == [b.cutoff(NOW)]
+    # ... and the followed thread was actually fetched by id, not just that
+    # the list scrape's guard let the run proceed.
+    assert source.by_id_calls == [["f@x.com"]]
 
 
 # -- collect --------------------------------------------------------
@@ -221,7 +769,7 @@ def test_collect_returns_new_threads_before_updated_ones():
         ],
         store,
     )
-    result = b.collect(b.cutoff(NOW))
+    result = b.collect(b.cutoff(NOW), ("netdev",))
     assert [c.thread.id for c in result] == ["new@x.com", "old@x.com"]
 
 
@@ -237,11 +785,11 @@ async def test_run_does_not_block_the_event_loop_during_collect():
     """
 
     class SlowSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             time.sleep(0.05)  # a real, blocking sleep — simulates requests.get()
             return []
 
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     b = Broadcaster(Settings(), store, SlowSource())
 
@@ -270,7 +818,7 @@ async def test_run_does_not_block_the_event_loop_during_collect():
 
 
 async def test_a_transient_telegram_error_does_not_unsubscribe():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
     bot = FakeBot(error_for={1: BadRequest("oops")})
@@ -289,7 +837,7 @@ async def test_a_transient_telegram_error_does_not_unsubscribe():
 
 
 async def test_a_follower_transient_telegram_error_does_not_unfollow():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.follow("old@x.com", 5)
     bot = FakeBot(error_for={5: BadRequest("oops")})
 
@@ -315,13 +863,13 @@ async def test_concurrent_run_calls_do_not_interleave_their_scrapes():
     events: list[str] = []
 
     class TrackingSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             events.append("enter")
             time.sleep(0.05)  # real blocking work, like requests.get()
             events.append("exit")
             return []
 
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     b = Broadcaster(Settings(), store, TrackingSource())
 
@@ -346,12 +894,12 @@ async def test_a_chat_that_stops_mid_scrape_receives_nothing():
     taken *before* collect() would still mail them the digest. The fix
     re-reads store.subscribers() after collect() returns.
     """
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     store.add_subscriber(2)
 
     class UnsubscribingSource:
-        def fetch_threads(self, since):
+        def fetch_threads(self, since, mailing_lists):
             # Simulates chat 1 sending /stop while the scrape is in flight.
             store.remove_subscriber(1)
             return [_thread("a@x.com", NOW)]
@@ -368,7 +916,7 @@ async def test_a_chat_that_stops_mid_scrape_receives_nothing():
 
 
 async def test_digest_header_uses_the_injected_now_not_wall_clock():
-    store = InMemoryStore()
+    store = InMemoryStore(default_lists=("netdev",))
     store.add_subscriber(1)
     bot = FakeBot()
     injected_now = datetime(2020, 1, 1, tzinfo=timezone.utc)

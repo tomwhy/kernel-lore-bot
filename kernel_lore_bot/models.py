@@ -22,9 +22,15 @@ class Entry:
     id: str  # Message-ID, without angle brackets
     title: str
     url: str
-    author: str
+    author: str  # display name, for humans to read
     updated: datetime
     reply: Optional[Reply]  # None <-> this is a thread root
+    # The From: address, lowercased, or "" when the header carried none.
+    # Separate from `author` because the blocklist matches on this and only
+    # this: display names are neither unique nor stable, addresses are.
+    # Defaults to "" — which BlockedAuthors always allows — so a source that
+    # cannot supply an address under-blocks rather than mutes the wrong mail.
+    author_email: str = ""
 
     @property
     def is_reply(self) -> bool:
@@ -58,10 +64,15 @@ class Thread:
 
     `roots` is normally exactly one node; more than one signals a split or
     malformed thread, which is kept rather than dropped.
+
+    `mailing_lists` holds every list the thread was seen on. One thread is
+    frequently cross-posted, and subscribers pick lists individually, so the
+    full set — not just whichever list surfaced it first — decides who
+    receives it.
     """
 
     roots: tuple[Node, ...]
-    mailing_list: str = ""
+    mailing_lists: frozenset[str] = frozenset()
 
     def walk(self) -> Iterator[Node]:
         for root in self.roots:
@@ -74,6 +85,10 @@ class Thread:
     @property
     def author(self) -> str:
         return self.roots[0].entry.author
+
+    @property
+    def author_email(self) -> str:
+        return self.roots[0].entry.author_email
 
     @property
     def updated(self) -> datetime:

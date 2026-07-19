@@ -68,6 +68,19 @@ def parse_message(msg: Message, base_url: str = LORE_BASE_URL) -> Optional[Entry
         # address portion is always plain ASCII per RFC 5322, so it needs
         # no decoding regardless of order.
         display_name, addr = parseaddr(msg["From"] or "")
+        # Lowercased so the blocklist's exact match is not defeated by a
+        # sender who capitalises their address differently between messages.
+        # Domains are case-insensitive by definition, and no mail system in
+        # practice treats two casings of a local part as separate mailboxes.
+        #
+        # The "@" check is not cosmetic: parseaddr() hands back a bare token
+        # as the *address* when a From: header has no angle-bracketed part
+        # at all (`From: Anonymous Coward` yields addr="Anonymous"). Storing
+        # that as an address would put a display-name fragment into the one
+        # field the blocklist trusts to be an address.
+        author_email = addr.strip().lower()
+        if "@" not in author_email:
+            author_email = ""
         author = decode_header_value(display_name).strip() or addr.strip() or "Unknown"
 
         try:
@@ -82,6 +95,7 @@ def parse_message(msg: Message, base_url: str = LORE_BASE_URL) -> Optional[Entry
             title=title,
             url=f"{base_url}/all/{msgid}",
             author=author,
+            author_email=author_email,
             updated=updated,
             reply=Reply(ref=in_reply_to) if in_reply_to else None,
         )
@@ -145,7 +159,8 @@ def build_thread(entries: list[Entry], mailing_list: str = "") -> Optional[Threa
             log.debug("Entry %s unreachable from any root — promoting to root", e.id)
             root_nodes.append(_build(e))
 
-    return Thread(roots=tuple(root_nodes), mailing_list=mailing_list)
+    lists = frozenset({mailing_list}) if mailing_list else frozenset()
+    return Thread(roots=tuple(root_nodes), mailing_lists=lists)
 
 
 def parse_thread(

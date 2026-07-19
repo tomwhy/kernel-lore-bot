@@ -8,6 +8,7 @@ register them in app.py.
 
 from __future__ import annotations
 
+import html
 import logging
 from typing import Awaitable, Callable, Optional
 
@@ -16,10 +17,28 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from kernel_lore_bot.delivery.keyboards import follow_keyboard, unfollow_keyboard, parse_callback
+from kernel_lore_bot.filters import looks_like_address, normalize_address
 from kernel_lore_bot.settings import Settings
+from kernel_lore_bot.sources.lore.index import ListRegistry
 from kernel_lore_bot.storage import Store
 
 log = logging.getLogger(__name__)
+
+LISTS_USAGE = (
+    "<code>/lists</code> — your lists\n"
+    "<code>/lists add &lt;name&gt; …</code>\n"
+    "<code>/lists del &lt;name&gt; …</code>\n"
+    "<code>/lists search &lt;query&gt;</code>"
+)
+
+FILTERS_USAGE = (
+    "<code>/filters</code> — your blocked addresses\n"
+    "<code>/filters block &lt;email&gt;</code>\n"
+    "<code>/filters unblock &lt;email&gt;</code>\n\n"
+    "<i>Blocks are by email address, matched in full: blocking "
+    "<code>lkp@intel.com</code> mutes that sender and only that sender. "
+    "Display names are not matched.</i>"
+)
 
 WELCOME_TEXT = (
     "👋 <b>Welcome to Kernel Lore Bot!</b>\n\n"
@@ -27,9 +46,11 @@ WELCOME_TEXT = (
     "🆕 = new thread  🔄 = updated thread\n\n"
     "Tap <b>🔔 Follow</b> on any thread to get notified when it receives updates.\n\n"
     "Commands:\n"
-    "<code>/start</code>  — subscribe to the daily digest\n"
-    "<code>/stop</code>   — unsubscribe\n"
-    "<code>/status</code> — check your subscription status\n"
+    "<code>/start</code>   — subscribe to the daily digest\n"
+    "<code>/stop</code>    — unsubscribe\n"
+    "<code>/status</code>  — check your subscription status\n"
+    "<code>/lists</code>   — choose which mailing lists you receive\n"
+    "<code>/filters</code> — mute senders by email address\n"
 )
 
 
@@ -40,10 +61,12 @@ class Handlers:
         self,
         settings: Settings,
         store: Store,
+        list_registry: ListRegistry,
         on_scrape: Optional[Callable[[object], Awaitable[None]]] = None,
     ) -> None:
         self.settings = settings
         self.store = store
+        self.list_registry = list_registry
         self._on_scrape = on_scrape
 
     # -- commands ------------------------------------------------------
@@ -70,6 +93,8 @@ class Handlers:
         if self.store.remove_subscriber(chat_id):
             await update.message.reply_text(
                 "👋 You've been unsubscribed and removed from all thread follows.\n"
+                "Your lists and blocked addresses are discarded too — /start again "
+                "re-seeds the defaults, not your old curation.\n"
                 "Send /start any time to re-subscribe."
             )
         else:
@@ -84,10 +109,195 @@ class Handlers:
             )
             return
 
-        await update.message.reply_html(
-            f"✅ You are subscribed to the daily kernel digest.\n"
+        lists = self.store.mailing_lists(chat_id)
+        blocks = self.store.blocked_authors(chat_id)
+
+        lines = ["✅ You are subscribed to the daily kernel digest."]
+        if not lists:
+            lines.append(
+                "📭 <b>No lists</b> — you will not receive a digest. "
+                "Send /lists add &lt;name&gt;."
+            )
+        else:
+            lines.append(
+                f"📬 <b>{len(lists)}</b> list(s) · 🔇 <b>{len(blocks)}</b> blocked address(es)"
+            )
+        lines.append(
             f"🔔 Following <b>{self.store.following_count(chat_id)}</b> thread(s) for updates."
         )
+
+        await update.message.reply_html("\n".join(lines))
+
+    def _subscribed(self, chat_id: int) -> bool:
+        return chat_id in self.store.subscribers()
+
+    async def lists(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id
+        if not self._subscribed(chat_id):
+            await update.message.reply_text(
+                "❌ You are not subscribed. Send /start first."
+            )
+            return
+
+        args = list(context.args or [])
+        if not args:
+            await update.message.reply_html(self._render_lists(chat_id))
+            return
+
+        action, names = args[0].lower(), [a.lower() for a in args[1:]]
+
+        if action == "search":
+            await update.message.reply_html(self._render_search(" ".join(names)))
+        elif action == "add" and names:
+            await update.message.reply_html(self._add_lists(chat_id, names))
+        elif action == "del" and names:
+            await update.message.reply_html(self._remove_lists(chat_id, names))
+        else:
+            await update.message.reply_html(LISTS_USAGE)
+
+    # -- /lists helpers ------------------------------------------------
+
+    def _render_lists(self, chat_id: int) -> str:
+        current = sorted(self.store.mailing_lists(chat_id))
+        if not current:
+            body = "📭 You have <b>no lists</b> — you will not receive a digest."
+        else:
+            shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in current)
+            body = f"📬 <b>Your lists ({len(current)}):</b>\n{shown}"
+        return f"{body}\n\n{LISTS_USAGE}"
+
+    def _render_search(self, query: str) -> str:
+        if not query:
+            return LISTS_USAGE
+        matches = self.list_registry.index.search(query)
+        if not matches:
+            return f"🔍 No lists match <code>{html.escape(query)}</code>."
+        shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in matches)
+        return f"🔍 <b>{len(matches)} match(es):</b>\n{shown}"
+
+    def _add_lists(self, chat_id: int, names: list[str]) -> str:
+        # dict.fromkeys dedupes while preserving the order the user typed
+        # names in, so "add netdev netdev" reports netdev once, not twice.
+        names = list(dict.fromkeys(names))
+        index = self.list_registry.index
+        valid = [n for n in names if index.is_valid(n)]
+        added = self.store.add_lists(chat_id, valid)
+
+        lines = []
+        for name in names:
+            safe = html.escape(name)
+            if not index.is_valid(name):
+                # Suggest rather than just rejecting: a typo and a half-
+                # remembered name look identical from here.
+                hints = index.suggest(name, limit=5)
+                # Names come from lore's manifest.js.gz, fetched over the
+                # network -- not a trusted constant -- so they must be
+                # escaped like any other interpolated value before reaching
+                # an HTML reply.
+                suffix = (
+                    f" — did you mean {', '.join(html.escape(h) for h in hints)}?"
+                    if hints
+                    else ""
+                )
+                lines.append(f"❌ unknown list: <code>{safe}</code>{suffix}")
+            elif name in added:
+                lines.append(f"✅ added <code>{safe}</code>")
+            else:
+                lines.append(f"ℹ️ already subscribed to <code>{safe}</code>")
+        return "\n".join(lines)
+
+    def _remove_lists(self, chat_id: int, names: list[str]) -> str:
+        # Same dedupe treatment as _add_lists, for the same reason.
+        names = list(dict.fromkeys(names))
+        # Deliberately not validated against the index: a name already in
+        # your state must be removable even if lore has since dropped it.
+        removed = self.store.remove_lists(chat_id, names)
+
+        lines = []
+        for name in names:
+            safe = html.escape(name)
+            if name in removed:
+                lines.append(f"✅ removed <code>{safe}</code>")
+            else:
+                lines.append(f"ℹ️ you were not subscribed to <code>{safe}</code>")
+
+        if not self.store.mailing_lists(chat_id):
+            lines.append(
+                "\n📭 You now have <b>no lists</b> — you will not receive a "
+                "digest until you add one."
+            )
+        return "\n".join(lines)
+
+    async def filters(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_chat.id
+        if not self._subscribed(chat_id):
+            await update.message.reply_text(
+                "❌ You are not subscribed. Send /start first."
+            )
+            return
+
+        args = list(context.args or [])
+        if not args:
+            await update.message.reply_html(self._render_blocks(chat_id))
+            return
+
+        action = args[0].lower()
+        # Still joined rather than taking args[1] alone: an address never
+        # contains a space, but a user typing a display name out of habit
+        # ("block Kernel Test Robot") must get the "that's not an address"
+        # explanation below, not a confusing complaint about "Kernel".
+        target = " ".join(args[1:]).strip()
+
+        if action == "block" and target:
+            await update.message.reply_html(self._block_author(chat_id, target))
+        elif action == "unblock" and target:
+            await update.message.reply_html(self._unblock_author(chat_id, target))
+        else:
+            await update.message.reply_html(FILTERS_USAGE)
+
+    # -- /filters helpers ------------------------------------------------
+
+    def _render_blocks(self, chat_id: int) -> str:
+        current = sorted(self.store.blocked_authors(chat_id))
+        if not current:
+            body = "🔇 You have <b>no blocked addresses</b>."
+        else:
+            shown = "\n".join(f"• <code>{html.escape(n)}</code>" for n in current)
+            body = f"🔇 <b>Blocked addresses ({len(current)}):</b>\n{shown}"
+        return f"{body}\n\n{FILTERS_USAGE}"
+
+    def _block_author(self, chat_id: int, email: str) -> str:
+        safe = html.escape(email)
+        # Reject anything that is not address-shaped instead of storing it.
+        # A display name matches nothing under exact-address matching, so
+        # accepting one would leave the subscriber with a rule they believe
+        # works and that silently never fires -- the exact failure the
+        # migration to v3 exists to clean up.
+        if not looks_like_address(email):
+            return (
+                f"❌ <code>{safe}</code> is not an email address.\n\n"
+                "Blocks are by address now, e.g. "
+                "<code>/filters block lkp@intel.com</code>. "
+                "You can find a sender's address in the thread on lore."
+            )
+        if self.store.block(chat_id, email):
+            return (
+                f"✅ Blocked <code>{html.escape(normalize_address(email))}</code> "
+                "— their threads will be hidden."
+            )
+        # The store normalizes before comparing, so echo the normalized form
+        # here too: that is the spelling actually on record, and the user has
+        # no other way to see it.
+        return (
+            f"ℹ️ You already block "
+            f"<code>{html.escape(normalize_address(email))}</code>."
+        )
+
+    def _unblock_author(self, chat_id: int, email: str) -> str:
+        safe = html.escape(email)
+        if self.store.unblock(chat_id, email):
+            return f"✅ Unblocked <code>{html.escape(normalize_address(email))}</code>."
+        return f"ℹ️ You were not blocking <code>{safe}</code>."
 
     async def scrape(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = update.effective_chat.id

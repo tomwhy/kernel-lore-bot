@@ -93,3 +93,115 @@ def test_unfollow_keeps_the_chat_subscribed(store):
     store.follow("t1", 1)
     store.unfollow("t1", 1)
     assert store.subscribers() == {1}
+
+
+def test_new_subscriber_is_seeded_with_defaults():
+    store = InMemoryStore(default_lists=("netdev", "lkml"), default_blocks=("bot",))
+    store.add_subscriber(1)
+
+    assert store.mailing_lists(1) == {"netdev", "lkml"}
+    assert store.blocked_authors(1) == {"bot"}
+
+
+def test_follow_on_a_brand_new_chat_seeds_defaults_too():
+    """follow() must seed the same defaults add_subscriber() does — a user
+    who taps Follow before ever sending /start must not end up subscribed
+    with zero lists and silently receive nothing."""
+    store = InMemoryStore(default_lists=("netdev", "lkml"), default_blocks=("bot",))
+    store.follow("t1", 42)
+
+    assert store.mailing_lists(42) == {"netdev", "lkml"}
+    assert store.blocked_authors(42) == {"bot"}
+
+
+def test_seeded_defaults_are_not_shared_between_subscribers():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+    store.add_lists(1, ["lkml"])
+
+    assert store.mailing_lists(2) == {"netdev"}
+
+
+def test_add_lists_returns_only_newly_added():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+
+    assert store.add_lists(1, ["netdev", "lkml"]) == {"lkml"}
+    assert store.mailing_lists(1) == {"netdev", "lkml"}
+
+
+def test_remove_lists_returns_only_actually_removed():
+    store = InMemoryStore(default_lists=("netdev", "lkml"))
+    store.add_subscriber(1)
+
+    assert store.remove_lists(1, ["lkml", "rcu"]) == {"lkml"}
+    assert store.mailing_lists(1) == {"netdev"}
+
+
+def test_lists_of_unknown_chat_are_empty():
+    store = InMemoryStore(default_lists=("netdev",))
+    assert store.mailing_lists(999) == set()
+    assert store.add_lists(999, ["lkml"]) == set()
+    assert 999 not in store.subscribers()
+
+
+def test_block_stores_the_address_normalised():
+    """One mailbox must have exactly one spelling on disk, so that the
+    filter's exact match cannot be defeated by how the user typed it."""
+    store = InMemoryStore()
+    store.add_subscriber(1)
+
+    assert store.block(1, "  LKP@Intel.COM  ") is True
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_block_is_case_insensitively_unique():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+
+    assert store.block(1, "lkp@intel.com") is True
+    assert store.block(1, "LKP@INTEL.COM") is False
+    assert store.blocked_authors(1) == {"lkp@intel.com"}
+
+
+def test_unblock_matches_case_insensitively():
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    store.block(1, "lkp@intel.com")
+
+    assert store.unblock(1, "  LKP@Intel.COM ") is True
+    assert store.blocked_authors(1) == set()
+    assert store.unblock(1, "nobody@example.com") is False
+
+
+def test_all_mailing_lists_is_the_union_across_subscribers():
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.add_subscriber(2)
+    store.add_lists(2, ["rcu"])
+
+    assert store.all_mailing_lists() == {"netdev", "rcu"}
+
+
+def test_all_mailing_lists_is_empty_with_no_subscribers():
+    assert InMemoryStore(default_lists=("netdev",)).all_mailing_lists() == set()
+
+
+def test_all_followed_threads_is_the_union_across_subscribers(store):
+    store.follow("t1", 1)
+    store.follow("t2", 2)
+    store.follow("t1", 2)  # shared with chat 1 -- must not appear twice
+
+    assert store.all_followed_threads() == {"t1", "t2"}
+
+
+def test_all_followed_threads_is_empty_with_no_follows(store):
+    store.add_subscriber(1)
+    assert store.all_followed_threads() == set()
+
+
+def test_all_followed_threads_drops_an_id_once_its_last_follower_unfollows(store):
+    store.follow("t1", 1)
+    store.unfollow("t1", 1)
+    assert store.all_followed_threads() == set()

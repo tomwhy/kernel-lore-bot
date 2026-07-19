@@ -53,13 +53,27 @@ def test_node_walk_yields_self_then_descendants():
 
 def test_thread_properties_delegate_to_first_root():
     root = Node(entry=_entry("root"))
-    thread = Thread(roots=(root,), mailing_list="netdev")
+    thread = Thread(roots=(root,), mailing_lists=frozenset({"netdev"}))
     assert thread.id == "root"
     assert thread.title == "subject root"
     assert thread.author == "Someone"
     assert thread.url == "https://lore.kernel.org/all/root"
     assert thread.updated == datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc)
-    assert thread.mailing_list == "netdev"
+    assert thread.mailing_lists == frozenset({"netdev"})
+
+
+def test_thread_exposes_root_fields_and_mailing_lists():
+    entry = _entry("root@example.com")
+    root = Node(entry=entry)
+    thread = Thread(roots=(root,), mailing_lists=frozenset({"netdev", "lkml"}))
+
+    assert thread.id == "root@example.com"
+    assert thread.mailing_lists == frozenset({"netdev", "lkml"})
+
+
+def test_thread_mailing_lists_defaults_to_empty():
+    thread = Thread(roots=(Node(entry=_entry("a@example.com")),))
+    assert thread.mailing_lists == frozenset()
 
 
 def test_thread_walk_covers_every_root():

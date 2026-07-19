@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from kernel_lore_bot import cli
 from kernel_lore_bot.models import Classified, Entry, Node, Thread, ThreadStatus
 from kernel_lore_bot.settings import PLACEHOLDER_TOKEN, Settings
+from kernel_lore_bot.storage import InMemoryStore
 
 CUTOFF = datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc)
 
@@ -16,7 +17,7 @@ def _classified(msg_id, status, updated=None):
         updated=updated or CUTOFF,
         reply=None,
     )
-    thread = Thread(roots=(Node(entry=entry),), mailing_list="netdev")
+    thread = Thread(roots=(Node(entry=entry),), mailing_lists=frozenset({"netdev"}))
     return Classified(thread=thread, status=status)
 
 
@@ -74,18 +75,55 @@ def test_dry_run_with_only_updated_threads_says_zero_new():
 
 # -- component wiring -----------------------------------------------
 
-def test_build_components_returns_a_store_source_and_filters(tmp_path):
+def test_build_components_seeds_the_store_from_settings(tmp_path):
     settings = Settings(
         state_dir=tmp_path, mailing_lists=("netdev",), blocked_authors=("robot",)
     )
-    store, source, filters = cli.build_components(settings)
-    assert store.subscribers() == set()
-    assert source.mailing_lists == ("netdev",)
-    assert len(filters) == 1
-    assert filters[0].names == ("robot",)
+    store, source, registry = cli.build_components(settings)
+    store.add_subscriber(1)
+
+    assert store.mailing_lists(1) == {"netdev"}
+    assert store.blocked_authors(1) == {"robot"}
 
 
-def test_build_components_makes_no_filters_when_none_configured(tmp_path):
-    settings = Settings(state_dir=tmp_path, blocked_authors=())
-    _, _, filters = cli.build_components(settings)
-    assert filters == []
+def test_build_components_falls_back_to_the_configured_lists(tmp_path):
+    """No network here, so the registry must start on the settings fallback."""
+    settings = Settings(state_dir=tmp_path, mailing_lists=("netdev",))
+    _, _, registry = cli.build_components(settings)
+
+    assert registry.index.is_valid("netdev") is True
+
+
+# -- main(["--dry"]) --------------------------------------------------
+
+
+class _StubSource:
+    """No network I/O: fetch_threads just returns canned threads."""
+
+    def __init__(self, threads=()):
+        self.threads = list(threads)
+
+    def fetch_threads(self, since, mailing_lists):
+        return list(self.threads)
+
+    def fetch_threads_by_id(self, ids):
+        return []
+
+
+def test_main_dry_run_does_not_crash_and_prints_the_report(monkeypatch, tmp_path, capsys):
+    """
+    Regression test: main(["--dry"]) used to pass the filters list positionally
+    into Broadcaster's list_registry parameter, which made collect() call
+    .refresh() on a plain list and raise AttributeError before any network
+    I/O. build_components is stubbed here so this test never touches the
+    network regardless.
+    """
+    monkeypatch.setattr(cli, "load_settings", lambda: Settings(state_dir=tmp_path))
+    monkeypatch.setattr(
+        cli,
+        "build_components",
+        lambda settings: (InMemoryStore(), _StubSource(), []),
+    )
+
+    assert cli.main(["--dry"]) == 0
+    assert "No new threads" in capsys.readouterr().out

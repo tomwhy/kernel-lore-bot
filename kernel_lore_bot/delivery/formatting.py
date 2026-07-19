@@ -30,6 +30,11 @@ def _link(url: str) -> str:
     return f'<a href="{html.escape(url, quote=True)}">🔗 View thread</a>'
 
 
+def _lists_label(thread: Thread) -> str:
+    """Every list the thread was seen on, sorted for a stable message."""
+    return ", ".join(sorted(thread.mailing_lists))
+
+
 def format_thread(classified: Classified, cutoff: datetime) -> str:
     """The per-thread digest message."""
     thread = classified.thread
@@ -38,8 +43,8 @@ def format_thread(classified: Classified, cutoff: datetime) -> str:
         f"👤 {_h(thread.author)}  🕐 {_h(thread.updated.strftime(_DATE_FMT))}",
     ]
 
-    if thread.mailing_list:
-        lines.append(f"📬 {_h(thread.mailing_list)}")
+    if thread.mailing_lists:
+        lines.append(f"📬 {_h(_lists_label(thread))}")
 
     new_count = count_entries_since(thread, cutoff)
     if new_count:
@@ -57,8 +62,8 @@ def format_update_notification(thread: Thread) -> str:
         f"<b>{_h(thread.title)}</b>",
         f"👤 {_h(thread.author)}  🕐 {_h(thread.updated.strftime(_DATE_FMT))}",
     ]
-    if thread.mailing_list:
-        lines.append(f"📬 {_h(thread.mailing_list)}")
+    if thread.mailing_lists:
+        lines.append(f"📬 {_h(_lists_label(thread))}")
     lines.append(_link(thread.url))
     return "\n".join(lines)
 
