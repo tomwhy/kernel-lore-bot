@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Callable, Protocol
 
@@ -30,10 +31,15 @@ class RequestsClient:
     """
     HttpClient backed by requests. lore 403s without a User-Agent.
 
-    Retries transient failures with exponential backoff. lore.kernel.org sheds
-    load with 503 during a multi-list scrape, and a bare `get` turns that into
-    a lost digest — so retrying is the difference between a late scrape and a
-    missing one.
+    Two defences against lore's rate limiting, which a multi-list scrape trips
+    easily:
+
+    * `min_interval` paces outgoing requests so we stay under the limit rather
+      than discovering it. A scrape issues its requests sequentially, so a
+      floor on the gap between them is enough — no token bucket needed.
+    * Transient failures (503 and friends) are retried with exponential
+      backoff, because staying under a limit is best-effort and a bare `get`
+      turns one refusal into a lost digest.
     """
 
     def __init__(
@@ -44,7 +50,9 @@ class RequestsClient:
         max_attempts: int = 3,
         backoff: float = 1.0,
         max_backoff: float = 30.0,
+        min_interval: float = 0.5,
         sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self.timeout = timeout
         self.user_agent = user_agent
@@ -52,13 +60,43 @@ class RequestsClient:
         self.max_attempts = max(1, max_attempts)
         self.backoff = backoff
         self.max_backoff = max_backoff
+        self.min_interval = min_interval
         self.sleep = sleep
+        self.monotonic = monotonic
+        # The scrape runs on a worker thread while the bot's list-index refresh
+        # may fire on another, and both share one client. Without the lock two
+        # threads could read the same "last request" stamp and both decide they
+        # owe no wait.
+        self._lock = threading.Lock()
+        self._last_request: float | None = None
+
+    def _throttle(self) -> None:
+        """
+        Block until `min_interval` has passed since the previous request began.
+
+        The slot is claimed under the lock but waited on outside it, so a second
+        caller reserves the *next* slot instead of queueing behind this one's
+        network I/O. Time already spent — a slow response, a retry backoff —
+        counts toward the interval rather than being added to.
+        """
+        with self._lock:
+            now = self.monotonic()
+            if self._last_request is None:
+                self._last_request = now
+                return
+            starts_at = max(now, self._last_request + self.min_interval)
+            self._last_request = starts_at
+
+        wait = starts_at - now
+        if wait > 0:
+            self.sleep(wait)
 
     def get(self, url: str, params: dict | None = None) -> bytes:
         last_exc: Exception | None = None
 
         for attempt in range(1, self.max_attempts + 1):
             retry_after: float | None = None
+            self._throttle()
             try:
                 resp = self.session.get(
                     url,

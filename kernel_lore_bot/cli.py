@@ -34,6 +34,7 @@ def build_components(settings: Settings) -> tuple[Store, LoreSource, ListRegistr
         timeout=settings.request_timeout,
         max_attempts=settings.request_attempts,
         backoff=settings.request_backoff,
+        min_interval=settings.request_min_interval,
     )
     store = JsonStore(
         settings.state_file,

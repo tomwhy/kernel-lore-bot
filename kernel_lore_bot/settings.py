@@ -55,6 +55,10 @@ class Settings:
     # digest costs a cycle.
     request_attempts: int = 3
     request_backoff: float = 1.0
+    # Minimum gap between outgoing requests. lore rate-limits an unpaced
+    # scrape; at ~2 req/s a full run costs a couple of extra minutes against a
+    # 4-hour schedule, which is cheap next to being throttled.
+    request_min_interval: float = 0.5
     state_dir: Path = Path("data")
 
     @property
