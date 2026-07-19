@@ -253,6 +253,57 @@ def test_corrupted_gzip_bit_flip_skips_only_that_thread(conftest_fake_client):
     assert [t.id for t in source.fetch_threads(SINCE, lists)] == ["good@x.com"]
 
 
+def test_crc_corrupted_gzip_mbox_is_skipped_with_a_warning_not_treated_as_plaintext(
+    conftest_fake_client, caplog
+):
+    """
+    Finding 8: index.py's fetch_list_names had this identical bug and was
+    fixed there -- gzip.BadGzipFile is raised not only for "no gzip magic"
+    but ALSO for a CRC32/length trailer mismatch (a gzip-shaped body with a
+    valid header and deflate stream, but a corrupted trailer -- e.g. one
+    flipped bit from a flaky mirror). The old `except gzip.BadGzipFile: pass`
+    fallback could not tell the two apart and treated CRC-corrupted bytes as
+    already-decompressed plaintext, handed them to the mbox parser, found no
+    "From " separator, and silently returned None at DEBUG level -- a
+    corrupt download was indistinguishable from an empty thread.
+
+    _fetch_thread must apply index.py's magic-byte check: decide "is this
+    gzip at all" from the leading 0x1f 0x8b bytes, not from which exception
+    gzip.decompress happens to raise, and log a WARNING (not DEBUG) when the
+    magic bytes are present but decompression still fails.
+    """
+    import logging
+
+    valid = _mbox_gz(_thread_mbox("crc@x.com"))
+    corrupted = bytearray(valid)
+    corrupted[-1] ^= 0xFF  # damage the trailing CRC32/size, not the header
+    corrupted = bytes(corrupted)
+    assert corrupted.startswith(b"\x1f\x8b")  # still gzip-shaped
+
+    client = conftest_fake_client(
+        {
+            FEED: [
+                _feed(
+                    ("crc@x.com", "2026-07-16T15:00:00Z"),
+                    ("good@x.com", "2026-07-16T14:00:00Z"),
+                ),
+                _feed(),
+            ],
+            f"{BASE}/all/crc@x.com/t.mbox.gz": [corrupted],
+            f"{BASE}/all/good@x.com/t.mbox.gz": [_mbox_gz(_thread_mbox("good@x.com"))],
+        }
+    )
+    source, lists = _source(client)
+
+    with caplog.at_level(logging.WARNING):
+        threads = list(source.fetch_threads(SINCE, lists))
+
+    assert [t.id for t in threads] == ["good@x.com"]
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("crc@x.com" in r.getMessage() or "Corrupt" in r.getMessage()
+               for r in warning_records)
+
+
 def test_corrupted_gzip_in_one_list_does_not_kill_a_later_list(conftest_fake_client):
     # DEFECT 16, end-to-end across lists: the corrupted gzip must not blow up
     # fetch_threads() itself, so a second, unrelated list in the same run

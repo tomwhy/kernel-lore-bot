@@ -63,6 +63,26 @@ async def test_stop_unsubscribes_and_clears_follows(handlers, store):
     assert "unsubscribed" in update.message.replies[0]["text"]
 
 
+async def test_stop_warns_that_curation_is_discarded(handlers, store):
+    """
+    Finding 5: /stop discards lists and blocked authors too (the whole
+    Subscriber record is removed), and /start re-seeds all defaults -- but
+    the old reply never said so. This does not change what /stop deletes,
+    only what it says.
+    """
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev"])
+    store.block(1, "kernel test robot")
+    update = FakeUpdate(chat_id=1)
+    await handlers.stop(update, FakeContext())
+    text = update.message.replies[0]["text"]
+    assert "lists" in text.lower()
+    assert "blocked authors" in text.lower()
+    # And the actual deletion behavior is unchanged.
+    assert store.mailing_lists(1) == set()
+    assert store.blocked_authors(1) == set()
+
+
 async def test_stop_when_not_subscribed_says_so(handlers):
     update = FakeUpdate(chat_id=1)
     await handlers.stop(update, FakeContext())
@@ -87,6 +107,34 @@ async def test_status_for_a_stranger(handlers):
     update = FakeUpdate(chat_id=1)
     await handlers.status(update, FakeContext())
     assert "not subscribed" in update.message.replies[0]["text"]
+
+
+async def test_status_warns_a_zero_lists_subscriber_that_no_digest_will_arrive(handlers, store):
+    """
+    Finding 2: /status used to say "✅ You are subscribed..." unconditionally
+    -- the exact reassurance someone gets when they run the exact command
+    used to check why digests stopped arriving, even though a zero-lists
+    subscriber (a state the v2 format deliberately allows) will never
+    receive one.
+    """
+    store.add_subscriber(1)  # InMemoryStore() fixture has no default_lists
+    update = FakeUpdate(chat_id=1)
+    await handlers.status(update, FakeContext())
+    text = update.message.replies[0]["text"]
+    assert "No lists" in text
+    assert "will not receive a digest" in text
+
+
+async def test_status_for_a_subscriber_with_lists_reports_counts(handlers, store):
+    store.add_subscriber(1)
+    store.add_lists(1, ["netdev", "lkml"])
+    store.block(1, "kernel test robot")
+    update = FakeUpdate(chat_id=1)
+    await handlers.status(update, FakeContext())
+    text = update.message.replies[0]["text"]
+    assert "will not receive a digest" not in text
+    assert "<b>2</b>" in text  # 2 lists
+    assert "<b>1</b>" in text  # 1 blocked author
 
 
 # -- /scrape --------------------------------------------------------
@@ -270,6 +318,35 @@ async def test_lists_add_rejects_an_unknown_name_and_keeps_the_good_ones():
     assert "netdevv" in text and "❌" in text
 
 
+async def test_lists_add_did_you_mean_escapes_html_in_index_names():
+    """
+    Finding 3: list names come from lore's manifest.js.gz, fetched over the
+    network -- not a trusted constant. A manifest key like
+    "/<b>netdev</b>/git/0.git" (lowercased by fetch_list_names, but never
+    HTML-escaped) yields an index name that carries raw markup. Before the
+    fix, ', '.join(hints) interpolated that raw name straight into an HTML
+    reply, which Telegram would then reject as unparsable markup.
+    """
+    store = InMemoryStore()
+    store.add_subscriber(1)
+    handlers = _handlers(
+        store, settings=Settings(admin_chat_id=99)
+    )
+    # Swap in an index that contains a markup-bearing name, as fetch_list_names
+    # would produce from a malicious/broken manifest key.
+    handlers.list_registry._index = handlers.list_registry._index.__class__(
+        frozenset({"<b>netdev</b>", "netdev-real"})
+    )
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["add", "netdev"]
+
+    await handlers.lists(update, context)
+
+    text = update.message.replies[0]["text"]
+    assert "<b>netdev</b>" not in text  # raw markup must never reach the reply
+    assert "&lt;b&gt;netdev&lt;/b&gt;" in text
+
+
 async def test_lists_add_suggests_near_matches():
     store = InMemoryStore()
     store.add_subscriber(1)
@@ -432,6 +509,24 @@ async def test_filters_block_reports_a_duplicate():
 
     assert store.blocked_authors(1) == {"Kernel Test Robot"}
     assert "already" in update.message.replies[0]["text"].lower()
+
+
+async def test_filters_block_duplicate_echoes_the_stored_casing_not_the_typed_one():
+    """
+    Finding 4: blocking "kernel TEST robot" when "Kernel Test Robot" is
+    already stored used to echo back the user's own typed casing, so the
+    user could never see what casing is actually recorded.
+    """
+    store = InMemoryStore(default_blocks=("Kernel Test Robot",))
+    store.add_subscriber(1)
+    update, context = FakeUpdate(chat_id=1), FakeContext()
+    context.args = ["block", "kernel", "TEST", "robot"]
+
+    await _handlers(store).filters(update, context)
+
+    text = update.message.replies[0]["text"]
+    assert "Kernel Test Robot" in text
+    assert "kernel TEST robot" not in text
 
 
 async def test_filters_unblock_removes_case_insensitively():

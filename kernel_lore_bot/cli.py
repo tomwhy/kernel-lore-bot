@@ -118,6 +118,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         broadcaster = Broadcaster(settings, store, source)
         cutoff = broadcaster.cutoff(datetime.now(timezone.utc))
         followed_ids = sorted(store.all_followed_threads())
+        # settings.mailing_lists, not store.all_mailing_lists(): production
+        # (_run_locked) scrapes the union of every subscriber's lists, but a
+        # --dry run is commonly the very first thing anyone runs, before any
+        # subscriber exists, when store.all_mailing_lists() would be empty
+        # and this would preview nothing at all. Using the configured lists
+        # instead means --dry always previews *something* on a fresh
+        # install -- at the cost of being a different code path than
+        # production once real subscribers with their own lists exist.
         print(
             format_dry_run(
                 broadcaster.collect(cutoff, settings.mailing_lists, followed_ids), cutoff

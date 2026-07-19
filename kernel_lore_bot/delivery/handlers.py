@@ -91,6 +91,8 @@ class Handlers:
         if self.store.remove_subscriber(chat_id):
             await update.message.reply_text(
                 "👋 You've been unsubscribed and removed from all thread follows.\n"
+                "Your lists and blocked authors are discarded too — /start again "
+                "re-seeds the defaults, not your old curation.\n"
                 "Send /start any time to re-subscribe."
             )
         else:
@@ -105,10 +107,24 @@ class Handlers:
             )
             return
 
-        await update.message.reply_html(
-            f"✅ You are subscribed to the daily kernel digest.\n"
+        lists = self.store.mailing_lists(chat_id)
+        blocks = self.store.blocked_authors(chat_id)
+
+        lines = ["✅ You are subscribed to the daily kernel digest."]
+        if not lists:
+            lines.append(
+                "📭 <b>No lists</b> — you will not receive a digest. "
+                "Send /lists add &lt;name&gt;."
+            )
+        else:
+            lines.append(
+                f"📬 <b>{len(lists)}</b> list(s) · 🔇 <b>{len(blocks)}</b> blocked author(s)"
+            )
+        lines.append(
             f"🔔 Following <b>{self.store.following_count(chat_id)}</b> thread(s) for updates."
         )
+
+        await update.message.reply_html("\n".join(lines))
 
     def _subscribed(self, chat_id: int) -> bool:
         return chat_id in self.store.subscribers()
@@ -172,7 +188,15 @@ class Handlers:
                 # Suggest rather than just rejecting: a typo and a half-
                 # remembered name look identical from here.
                 hints = index.suggest(name, limit=5)
-                suffix = f" — did you mean {', '.join(hints)}?" if hints else ""
+                # Names come from lore's manifest.js.gz, fetched over the
+                # network -- not a trusted constant -- so they must be
+                # escaped like any other interpolated value before reaching
+                # an HTML reply.
+                suffix = (
+                    f" — did you mean {', '.join(html.escape(h) for h in hints)}?"
+                    if hints
+                    else ""
+                )
                 lines.append(f"❌ unknown list: <code>{safe}</code>{suffix}")
             elif name in added:
                 lines.append(f"✅ added <code>{safe}</code>")
@@ -239,10 +263,18 @@ class Handlers:
         return f"{body}\n\n{FILTERS_USAGE}"
 
     def _block_author(self, chat_id: int, name: str) -> str:
-        safe = html.escape(name)
         if self.store.block(chat_id, name):
-            return f"✅ Blocked <code>{safe}</code> — their threads will be hidden."
-        return f"ℹ️ You already block <code>{safe}</code>."
+            return f"✅ Blocked <code>{html.escape(name)}</code> — their threads will be hidden."
+        # block() already found the match with the same case-insensitive
+        # comparison it uses to reject the duplicate; look it up the same
+        # way here so the reply echoes the STORED casing, not whatever
+        # casing the user just typed -- otherwise the user has no way to
+        # see what is actually recorded.
+        existing = next(
+            (e for e in self.store.blocked_authors(chat_id) if e.lower() == name.lower()),
+            name,
+        )
+        return f"ℹ️ You already block <code>{html.escape(existing)}</code>."
 
     def _unblock_author(self, chat_id: int, name: str) -> str:
         safe = html.escape(name)

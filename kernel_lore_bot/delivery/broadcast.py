@@ -226,6 +226,24 @@ class Broadcaster:
         new = [c for c in classified if c.status is ThreadStatus.NEW]
         updated = [c for c in classified if c.status is ThreadStatus.UPDATED]
 
+        # A thread with no mailing_lists reached us only via the by-id
+        # follow scrape (fetch_threads_by_id always sets mailing_lists=
+        # frozenset(), never populated by the list scrape -- see its
+        # docstring), so it can only ever be in someone's follow set, never
+        # in a digest: visible_for() requires `item.thread.mailing_lists &
+        # lists` to be non-empty, which an empty set can never satisfy.
+        # classify() has no idea which path a thread arrived by, though --
+        # it labels NEW vs UPDATED purely from the root's timestamp against
+        # cutoff. So when a listless followed thread's root happens to be
+        # NEWER than cutoff, classify() calls it NEW, `new` routes it to
+        # _send_digest (where it is silently invisible to everyone), and
+        # _notify_followers never sees it because it only iterates
+        # `updated`. Folding these into `updated` here is safe against
+        # double notification: a listless thread was never reachable
+        # through _send_digest in the first place, so moving it here cannot
+        # create a second copy of anything.
+        updated = updated + [c for c in new if not c.thread.mailing_lists]
+
         subscriber_ids = self.store.subscribers()
         log.info(
             "Broadcast: %d new thread(s) collected for %d subscriber(s) "

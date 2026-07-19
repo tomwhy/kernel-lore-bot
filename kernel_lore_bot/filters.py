@@ -1,8 +1,12 @@
 """
 Thread filters. Pure; no I/O.
 
-To add a filter, write a class with an `allows` method and pass it to
-apply_filters. Nothing else needs to change.
+A filter is any class with an `allows` method. apply_filters() composes a
+sequence of them, but it has no production callers today: the real
+extension point is Broadcaster.visible_for (kernel_lore_bot/delivery/
+broadcast.py), which hardcodes BlockedAuthors. To add a filter that actually
+runs, wire it into visible_for -- writing an `allows` class alone runs it
+nowhere.
 """
 
 from __future__ import annotations

@@ -174,20 +174,25 @@ class LoreSource:
             log.warning("Could not fetch mbox %s: %s", url, exc)
             return None
 
-        try:
-            raw = gzip.decompress(raw)
-        except gzip.BadGzipFile:
-            pass  # server sent an uncompressed mbox; use the bytes as-is
-        except (EOFError, zlib.error) as exc:
-            # Any other way a gzip body can be broken: EOFError for a truncated
-            # stream (connection cut mid-download, neither BadGzipFile nor
-            # OSError so it must be caught by name), zlib.error for corruption
-            # mid-stream (e.g. a flipped bit) that isn't a header/CRC problem.
-            # This except clause runs only when the body IS gzip-shaped but
-            # broken -- the BadGzipFile clause above already claimed the
-            # "not gzip at all" case, so that plaintext fallback is untouched.
-            log.warning("Corrupted/truncated gzip mbox at %s: %s", url, exc)
-            return None
+        # Whether the body is gzip at all is decided by its magic bytes, not
+        # by which exception gzip.decompress happens to raise: a gzip-shaped
+        # body with a corrupted CRC32/length trailer (e.g. one flipped bit
+        # from a flaky mirror) also raises gzip.BadGzipFile, same as a body
+        # with no gzip header at all. Only the latter is genuinely already-
+        # decompressed plaintext (some mirrors serve uncompressed mboxes);
+        # the former is a corrupt download and must be reported as such, not
+        # silently handed to the parser where it looks like an empty thread.
+        # index.py's fetch_list_names has this identical check.
+        if raw[:2] == b"\x1f\x8b":
+            try:
+                raw = gzip.decompress(raw)
+            except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+                # BadGzipFile: corrupted header or CRC/length trailer.
+                # EOFError: a truncated stream (connection cut mid-download).
+                # zlib.error: corruption mid-stream (e.g. a flipped bit) that
+                # isn't a header/CRC problem.
+                log.warning("Corrupted gzip mbox at %s: %s", url, exc)
+                return None
 
         thread = mbox_parser.parse_thread(
             raw.decode("utf-8", errors="replace"), list_name, base_url=self.base_url

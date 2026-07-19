@@ -662,6 +662,71 @@ async def test_nothing_is_fetched_when_there_are_no_lists_and_no_follows():
     assert source.by_id_calls == []
 
 
+async def test_zero_lists_follower_of_a_fresh_root_off_list_thread_is_notified():
+    """
+    Finding 1: fetch_threads_by_id gives a followed thread mailing_lists=
+    frozenset(). classify() labels NEW vs UPDATED purely from the root's
+    timestamp, with no idea the thread arrived via the by-id path. When the
+    root happens to be NEWER than cutoff, classify() calls it NEW, which
+    _run_locked routes to _send_digest -- but visible_for() can never show an
+    empty-mailing_lists thread to anyone (the intersection is always empty),
+    and _notify_followers only ever looks at `updated`. So a listless
+    followed thread with a fresh root reached nobody at all, even though it
+    was fetched successfully and passed the count_entries_since gate.
+    """
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)  # zero lists -- follow() auto-subscribes
+
+    # Root newer than cutoff (NOW), single node so count_entries_since > 0.
+    followed = _thread("f@x.com", NOW, mailing_lists=frozenset())
+    source = FakeSource([], by_id={"f@x.com": followed})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_zero_lists_follower_of_an_old_root_off_list_thread_is_still_notified():
+    """The existing older-root case (already covered by
+    test_zero_lists_follower_is_notified_when_followed_thread_updates) must
+    keep working after the fix -- restated here as the direct sibling of the
+    fresh-root case above, so the two are read together."""
+    store = InMemoryStore()
+    store.follow("f@x.com", 1)
+
+    followed = _thread_with_reply(
+        "f@x.com", NOW - timedelta(hours=48), "reply@x.com", NOW
+    )
+    source = FakeSource([], by_id={"f@x.com": followed})
+    bot = FakeBot()
+    b = Broadcaster(Settings(loopback_hours=4), store, source)
+    await b.run(bot, now=NOW)
+
+    assert any("Thread update" in t for t in bot.texts_to(1))
+
+
+async def test_a_follower_of_an_on_list_new_thread_gets_one_digest_copy_and_no_notification():
+    """
+    A subscriber who has the thread's list AND follows it must get exactly
+    one message -- the digest copy -- and not also an update notification.
+    The new/updated split must not double-fire for a thread that has real
+    mailing_lists and is genuinely NEW.
+    """
+    store = InMemoryStore(default_lists=("netdev",))
+    store.add_subscriber(1)
+    store.follow("a@x.com", 1)
+
+    threads = [_thread("a@x.com", NOW, mailing_lists={"netdev"})]
+    bot = FakeBot()
+    await _broadcaster(threads, store).run(bot, now=NOW)
+
+    # Header + one thread message from the digest; no separate "Thread
+    # update" notification.
+    assert len(bot.texts_to(1)) == 2
+    assert not any("Thread update" in t for t in bot.texts_to(1))
+
+
 async def test_the_scrape_runs_for_follows_even_with_no_lists():
     """The list scrape (source.fetch_threads) still runs -- with an empty
     mailing_lists sequence -- when there are follows but no lists, since the
