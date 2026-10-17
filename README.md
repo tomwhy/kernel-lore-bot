@@ -42,7 +42,7 @@ All configuration is environment variables, read once at startup into a frozen
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | *(required)* | Bot token from @BotFather |
 | `ADMIN_CHAT_ID` | `0` | Chat allowed to run `/scrape`; `0` disables it |
-| `LOOPBACK_HOURS` | `4` | How far back a scrape looks |
+| `LOOPBACK_HOURS` | `24` | How far back a scrape looks |
 | `SCHEDULE_INTERVAL_HOURS` | `LOOPBACK_HOURS` | Hours between scrapes; fractions allowed |
 | `KERNEL_BOT_STATE_DIR` | `data` | Directory holding `state.json` |
 

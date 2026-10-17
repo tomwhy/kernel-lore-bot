@@ -13,7 +13,8 @@ def test_defaults_do_not_require_env():
     assert s.telegram_bot_token == PLACEHOLDER_TOKEN
     assert s.admin_chat_id == 0
     assert s.mailing_lists == DEFAULT_MAILING_LISTS
-    assert s.loopback_hours == 4.0
+    assert s.loopback_hours == 24.0
+    assert s.schedule_interval_hours == 24.0
 
 
 def test_env_overrides_defaults():
